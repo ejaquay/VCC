@@ -20,28 +20,41 @@ This file is part of VCC (Virtual Color Computer).
 
 #include <windows.h>
 
+// Following function used in Vcc.c
+void PiaReset(); //VCC.c
+
+// Following functions are used in iobus.c
 unsigned char pia0_read(unsigned char port);
 void pia0_write(unsigned char data,unsigned char port);
 unsigned char pia1_read(unsigned char port);
 void pia1_write(unsigned char data,unsigned char port);
 
+// Following functions are used in config.c
 void ClosePrintFile(void);
 void SetSerialParams(unsigned char);
 void SetMonState(BOOL);
-unsigned char VDG_Mode(void);
-void kb_tap(unsigned int,unsigned int,unsigned int);
+int OpenPrintFile(char *);
+unsigned char SetCartAutoStart(unsigned char);
+
+// Following function is used in pakinterface.c
+void SetCart(unsigned char);
+
+// Following functions are used in keyboard.c
+unsigned char GetMuxState(void);
+unsigned char DACState(void);
+
+// Following functions are referenced only in mc6821.c
 void irq_hs(int);
 void irq_fs(int);
 void AssertCart(void);
-void SetCart(unsigned char);
-unsigned char SetCartAutoStart(unsigned char);
-void PiaReset();
-unsigned char GetMuxState(void);
-unsigned char DACState(void);
 unsigned int GetDACSample(void);
 unsigned char GetCasSample(void);
 void SetCassetteSample(unsigned char);
-int OpenPrintFile(char *);
+unsigned char VDG_Mode(void);
+
+// Following function is not defined
+void kb_tap(unsigned int,unsigned int,unsigned int);
+
 #define FALLING 0
 #define RISING	1
 #define ANY		2

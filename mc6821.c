@@ -34,14 +34,94 @@ This file is part of VCC (Virtual Color Computer).
 #include "resource.h"
 #include <cstdint>
 
-static unsigned char rega[4]={0,0,0,0};
-static unsigned char regb[4]={0,0,0,0};
-static unsigned char rega_dd[4]={0,0,0,0}; 
-static unsigned char regb_dd[4]={0,0,0,0};
+// Comments added by EJJ April 2021
+//
+// The following four arrays were previously named rega* and regb*.
+// Renamed to pia0* and pia1* to avoid confusion with A,B ports.
+// These contain the six PIA registers for each PIA. (two elements
+// in the *_dd arrays are unused).  Each PIA contains two peripheral
+// data registers PDA and PDB, two data direction registers DDA and DDB,
+// and two control registers CRA and CRB.
+
+static unsigned char pia0[4]={0,0,0,0};      // PIA0 PDA,CRA,PDB,CRB
+static unsigned char pia1[4]={0,0,0,0};      // PIA1 PDA,CRA,PDB,CRB
+static unsigned char pia0_dd[4]={0,0,0,0};   // PIA0 DDA,xxx,DDB,xxx
+static unsigned char pia1_dd[4]={0,0,0,0};   // PIA1 DDA,xxx,DDB,xxx
+
+// In addition each PIA has two eight bit peripheral interfaces
+// (PA and PB) and several control lines: CS0, CS1, and CS2 chip select
+// lines; RS0 and RS1 register select lines; and CA1, CA2, CB1 and CB2
+// interrupt status and control lines.
+
+// Register select lines (RS0 and RS1) in conjunction with bit
+// two of the control registors (CRA2 amd CRB2) determine which
+// register is operated on.  The chip select lines are connected
+// to the ports starting FF00 and FF20, thus reading/writing
+// these ports affect the registers as follows:
+//
+//  PIA0  PIA1  RS1  RS0 CRA2 CRB2  Reg
+//  ----  ----  ---  --- ---- ----  ---
+//  FF00  FF20   0    0    1    x   PDA
+//  FF00  FF20   0    0    0    x   DDA
+//  FF01  FF21   0    1    x    x   CRA
+//  FF02  FF22   1    0    x    1   PDB
+//  FF02  FF22   1    0    x    0   DDB
+//  FF03  FF23   1    1    x    x   CRB
+//
+// Control registers CRA and CRB control PIA operation.
+//
+// CRA1 and CRB1 control when IRQ is generated, if zero IRQ
+// is set by high to low transition of CA1 and CB1. if one
+// IRQ is set by low to high transition.
+//
+// CRA2 and CRB2 select data registor or direction registor. If set
+// data registor is selected.
+//
+// CRA3, CRA4, CRA5, CRB3, CRB4, and CRB5 control the CA2 and CB2
+// periperal control lines.  They determine if the control lines
+// will be an interrupt input or and output control signal.  If
+// CRA5 (CRB5) is low, CA2 (CB2) is an interrupt simular to CA1
+// (CB1).  When CRA5 (CB5) is high CA2 (CB2) becomes an output
+// signal the may be used fo control peripheral data transfers.
+//
+// CRA6, CRA7, CRB6, and CRB7 are interrupt flags bits set by
+// transitions of the four interrupt and peritheral control
+// lines when those lines are programmed to be inputs.
+//
+// In the CoCO PIA0 is used for keyboard, printer, horizontal and
+// verticle sync interrupts, and joystick directrions.  PIA1 is used
+// for cassette, printer, audio, and cartridge.
+//
+// PA0-PA6 are wired to keyboard rows 0-6 respectively
+// PA0-PA3 are also wired to the joystick switches R1,L1,R2,L2
+// PB0-PB7 are wired to keyboard cols 0-7 respectively
+//
+// Keyboard is accessed via PIA0 by setting FF00 for input,
+// FF02 for output, then strobing the columns in FF02 and
+// reading the key(s) from FF00. FF00 and FF02 are sometimes reversed.
+// (eg RS tetris, which as of this date does not work)
+//
+// The PDA (PDB) register is accessed by setting CRA2 (CRB2) and
+// writing to port FF00 (FF20).  The DDA (DDB) registers are
+// set by clearing CRA3 and writing or writing to port FF00 (FF20)
+//
+// Bit 0 of $FF20 is cassette data input. Bit 1 is RS232 output.
+// Bits 2-7 of $FF20 are the D/A converter, values here are compared
+// to joystick readings.  The high bit of $FF00 will be set whenever
+// the joystick values exceeds the D/A value.
+//
+// Bit 3 of $FF21 is cassette motor control
+// Bit 0 of $FF22 is RS232 data input
+// Bit 1 of $FF22 is sound output
+// bit 3 of $FF23 is sound enable
+
+// State flags for various periperals
 static unsigned char LeftChannel=0,RightChannel=0;
 static unsigned char Asample=0,Ssample=0,Csample=0;
 static unsigned char CartInserted=0,CartAutoStart=1;
 static unsigned char AddLF=0;
+
+// Handles and data for printer
 static HANDLE hPrintFile=INVALID_HANDLE_VALUE;
 void CaptureBit(unsigned char);
 static HANDLE hout=NULL;
@@ -52,167 +132,173 @@ static BOOL MonState=FALSE;
 //static unsigned char CoutSample=0;
 //extern STRConfig CurrentConfig;
 // Shift Row Col
+
+// pia0_read is called when emulation reads address FF00-FF03
 unsigned char pia0_read(unsigned char port)
 {
 	unsigned char dda,ddb;
-	dda=(rega[1] & 4);
-	ddb=(rega[3] & 4);
+	dda=(pia0[1] & 4);
+	ddb=(pia0[3] & 4);
 
 	switch (port)
 	{
+        // Read CRA, CRB
 		case 1:
-			return(rega[port]);
+			return(pia0[port]);
 		break;
-
 		case 3:
-			return(rega[port]); 
+			return(pia0[port]);
 		break;
 
+		// Read PDA, DDA, PDB, or PDA
 		case 0:
 			if (dda)
 			{
-				rega[1]=(rega[1] & 63);
-				return (vccKeyboardGetScan(rega[2])); //Read
+				pia0[1]=(pia0[1] & 63);  // Clear interrupt bit
+				return (vccKeyboardGetScan(pia0[2]));
 			}
 			else
-				return(rega_dd[port]);
+				return(pia0_dd[port]);
 		break;
 
-		case 2: //Write 
+		// Read PDB or DDB
+		case 2:
 			if (ddb)
 			{
-				rega[3]=(rega[3] & 63);
-				return(rega[port] & rega_dd[port]);
+				pia0[3]=(pia0[3] & 63);   // Clear interrupt bit
+			    return(pia0[port] & pia0_dd[port]);
 			}
 			else
-				return(rega_dd[port]);
+				return(pia0_dd[port]);
 		break;
 	}
 	return(0);
 }
 
+// pia1_read is called when emulation reads address FF20-FF23
 unsigned char pia1_read(unsigned char port)
 {
 	static unsigned int Flag=0,Flag2=0;
 	unsigned char dda,ddb;
 	port-=0x20;
-	dda=(regb[1] & 4);
-	ddb=(regb[3] & 4);
+	dda=(pia1[1] & 4);
+	ddb=(pia1[3] & 4);
 
 	switch (port)
 	{
 		case 1:
 		//	return(0);
 		case 3:
-			return(regb[port]);
+			return(pia1[port]);
 		break;
 
 		case 2:
 			if (ddb)
 			{
-				regb[3]= (regb[3] & 63);
-
-				return(regb[port] & regb_dd[port]);
+				pia1[3]= (pia1[3] & 63);
+				return(pia1[port] & pia1_dd[port]);
 			}
 			else
-				return(regb_dd[port]);
+				return(pia1_dd[port]);
 		break;
 
 		case 0:
 			if (dda)
 			{
-				regb[1]=(regb[1] & 63); //Cass In
-				Flag=regb[port] ;//& regb_dd[port];
+				pia1[1]=(pia1[1] & 63); //Cass In
+				Flag=pia1[port] ;//& pia1_dd[port];
 				return(Flag);
 			}
 			else
-				return(regb_dd[port]);
+				return(pia1_dd[port]);
 		break;
 	}
 	return(0);
 }
 
+// pia0_write is called when emulation writes address FF00-FF03
 void pia0_write(unsigned char data,unsigned char port)
 {
 	unsigned char dda,ddb;
-	dda=(rega[1] & 4);
-	ddb=(rega[3] & 4);
+	dda=(pia0[1] & 4);
+	ddb=(pia0[3] & 4);
 
 	switch (port)
 	{
 	case 0:
 		if (dda)
-			rega[port]=data;
+			pia0[port]=data;
 		else
-			rega_dd[port]=data;
+			pia0_dd[port]=data;
 		return;
 	case 2:
 		if (ddb)
-			rega[port]=data;
+			pia0[port]=data;
 		else
-			rega_dd[port]=data;
+			pia0_dd[port]=data;
 		return;
 	break;
 
 	case 1:
-		rega[port]= (data & 0x3F);
+		pia0[port]= (data & 0x3F);
 		return;
 	break;
 
 	case 3:
-		rega[port]= (data & 0x3F);
+		pia0[port]= (data & 0x3F);
 		return;
-	break;	
+	break;
 	}
 	return;
 }
 
+// pia1_write is called when emulation writes address FF20-FF23
 void pia1_write(unsigned char data,unsigned char port)
 {
 	unsigned char dda,ddb;
 	static unsigned short LastSS=0;
 	port-=0x20;
 
-	dda=(regb[1] & 4);
-	ddb=(regb[3] & 4);	
+	dda=(pia1[1] & 4);
+	ddb=(pia1[3] & 4);
 	switch (port)
 	{
 	case 0:
 		if (dda)
 		{
-			regb[port]=data;
-			CaptureBit((regb[0]&2)>>1);
-			if (GetMuxState()==0)  
-				if ((regb[3] & 8)!=0)//==0 for cassette writes
-					Asample	= (regb[0] & 0xFC)>>1; //0 to 127
+			pia1[port]=data;
+			CaptureBit((pia1[0]&2)>>1);
+			if (GetMuxState()==0)
+				if ((pia1[3] & 8)!=0)//==0 for cassette writes
+					Asample	= (pia1[0] & 0xFC)>>1; //0 to 127
 				else
-					Csample = (regb[0] & 0xFC);
+					Csample = (pia1[0] & 0xFC);
 		}
 		else
-			regb_dd[port]=data;
+			pia1_dd[port]=data;
 		return;
 	break;
 
 	case 2: //FF22
 		if (ddb)
 		{
-			regb[port]=(data & regb_dd[port]); 
-			SetGimeVdgMode2( (regb[2] & 248) >>3);
-			Ssample=(regb[port] & 2)<<6;
+			pia1[port]=(data & pia1_dd[port]);
+			SetGimeVdgMode2( (pia1[2] & 248) >>3);
+			Ssample=(pia1[port] & 2)<<6;
 		}
 		else
-			regb_dd[port]=data;
+			pia1_dd[port]=data;
 		return;
 	break;
 
 	case 1:
-		regb[port]= (data & 0x3F);
+		pia1[port]= (data & 0x3F);
 		Motor((data & 8)>>3);
 		return;
 	break;
 
 	case 3:
-		regb[port]= (data & 0x3F);
+		pia1[port]= (data & 0x3F);
 		return;
 	break;
 	}
@@ -221,7 +307,7 @@ void pia1_write(unsigned char data,unsigned char port)
 
 unsigned char VDG_Mode(void)
 {
-	return( (regb[2] & 248) >>3);
+	return( (pia1[2] & 248) >>3);
 }
 
 
@@ -231,24 +317,24 @@ void irq_hs(int phase)	//63.5 uS
 	switch (phase)
 	{
 	case FALLING:	//HS went High to low
-		if ( (rega[1] & 2) ) //IRQ on low to High transition
+		if ( (pia0[1] & 2) ) //IRQ on low to High transition
 			return;
-		rega[1]=(rega[1] | 128);
-		if (rega[1] & 1)
+		pia0[1]=(pia0[1] | 128);
+		if (pia0[1] & 1)
 			CPUAssertInterupt(IRQ,1);
 	break;
 
 	case RISING:	//HS went Low to High
-		if ( !(rega[1] & 2) ) //IRQ  High to low transition
+		if ( !(pia0[1] & 2) ) //IRQ  High to low transition
 		return;
-		rega[1]=(rega[1] | 128);
-		if (rega[1] & 1)
+		pia0[1]=(pia0[1] | 128);
+		if (pia0[1] & 1)
 			CPUAssertInterupt(IRQ,1);
 	break;
 
-	case ANY:	
-		rega[1]=(rega[1] | 128);
-		if (rega[1] & 1)
+	case ANY:
+		pia0[1]=(pia0[1] | 128);
+		if (pia0[1] & 1)
 			CPUAssertInterupt(IRQ,1);
 	break;
 	} //END switch
@@ -263,9 +349,9 @@ void irq_fs(int phase)	//60HZ Vertical sync pulse 16.667 mS
 	switch (phase)
 	{
 	case 0:	//FS went High to low
-		if ( (rega[3] & 2)==0 ) //IRQ on High to low transition
-			rega[3]=(rega[3] | 128);
-		if (rega[3] & 1)
+		if ( (pia0[3] & 2)==0 ) //IRQ on High to low transition
+			pia0[3]=(pia0[3] | 128);
+		if (pia0[3] & 1)
 			CPUAssertInterupt(IRQ,1);
 
 		return;
@@ -273,10 +359,10 @@ void irq_fs(int phase)	//60HZ Vertical sync pulse 16.667 mS
 
 	case 1:	//FS went Low to High
 
-		if ( (rega[3] & 2) ) //IRQ  Low to High transition
+		if ( (pia0[3] & 2) ) //IRQ  Low to High transition
 		{
-		rega[3]=(rega[3] | 128);
-		if (rega[3] & 1)
+		pia0[3]=(pia0[3] | 128);
+		if (pia0[3] & 1)
 			CPUAssertInterupt(IRQ,1);
 		}
 		return;
@@ -288,33 +374,33 @@ void irq_fs(int phase)	//60HZ Vertical sync pulse 16.667 mS
 
 void AssertCart(void)
 {
-	regb[3]=(regb[3] | 128);
-	if (regb[3] & 1)
+	pia1[3]=(pia1[3] | 128);
+	if (pia1[3] & 1)
 		CPUAssertInterupt(FIRQ,0);
 	else
 		CPUDeAssertInterupt(FIRQ); //Kludge but working
 }
 
 void PiaReset()
-{	
+{
 	// Clear the PIA registers
 	for (uint8_t index=0; index<4; index++)
 	{
-		rega[index]=0;
-		regb[index]=0;
-		rega_dd[index]=0;
-		regb_dd[index]=0;
+		pia0[index]=0;
+		pia1[index]=0;
+		pia0_dd[index]=0;
+		pia1_dd[index]=0;
 	}
 }
 
 unsigned char GetMuxState(void)
 {
-	return ( ((rega[1] & 8)>>3) + ((rega[3] & 8) >>2));
+	return ( ((pia0[1] & 8)>>3) + ((pia0[3] & 8) >>2));
 }
 
 unsigned char DACState(void)
 {
-	return (regb[0]>>2);
+	return (pia1[0]>>2);
 }
 
 void SetCart(unsigned char cart)
@@ -374,9 +460,9 @@ unsigned char GetCasSample(void)
 
 void SetCassetteSample(unsigned char Sample)
 {
-	regb[0]=regb[0] & 0xFE;
+	pia1[0]=pia1[0] & 0xFE;
 	if (Sample>0x7F)
-		regb[0]=regb[0] | 1;
+		pia1[0]=pia1[0] | 1;
 }
 
 void CaptureBit(unsigned char Sample)
@@ -453,7 +539,7 @@ void WritePrintMon(char *Data)
 	{
 		AllocConsole();
 		hout=GetStdHandle(STD_OUTPUT_HANDLE);
-		SetConsoleTitle("Printer Monitor"); 
+		SetConsoleTitle("Printer Monitor");
 	}
 	WriteConsole(hout,Data,1,&dummy,0);
 	if (Data[0]==0x0D)
