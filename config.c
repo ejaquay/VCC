@@ -81,7 +81,7 @@ static HICON CpuIcons[2],MonIcons[2],JoystickIcons[4];
 static unsigned char temp=0,temp2=0;
 static char IniFileName[]="Vcc.ini";
 static char IniFilePath[MAX_PATH]="";
-static char KeyMapFilePath[MAX_PATH]="";
+static char KeyMapFilePath[kKBLayoutCount][MAX_PATH];
 static char TapeFileName[MAX_PATH]="";
 static char ExecDirectory[MAX_PATH]="";
 static char SerialCaptureFile[MAX_PATH]="";
@@ -324,7 +324,8 @@ unsigned char ReadIniFile(void)
 	if (CurrentConfig.KeyMap>3)
 		CurrentConfig.KeyMap=0;	//Default to DECB Mapping
 
-	if (CurrentConfig.KeyMap == kKBLayoutCustom) LoadCustomKeyMap(GetKeyMapFilePath());
+	// Load keymap customization if there is any.
+	LoadCustomKeyMap(KeyMapFilePath[CurrentConfig.KeyMap]);
 	vccKeyboardBuildRuntimeTable((keyboardlayout_e)CurrentConfig.KeyMap);
 
 	CheckPath(CurrentConfig.ModulePath);
@@ -353,14 +354,16 @@ unsigned char ReadIniFile(void)
 	GetPrivateProfileString("DefaultPaths", "FloppyPath", "", CurrentConfig.FloppyPath, MAX_PATH, IniFilePath);
 	GetPrivateProfileString("DefaultPaths", "COCO3ROMPath", "", CurrentConfig.COCO3ROMPath, MAX_PATH, IniFilePath);
 
-//  Establish custom keymap file path
-	GetPrivateProfileString("Misc","CustomKeyMapFile","",KeyMapFilePath,MAX_PATH,IniFilePath);
-	if (*KeyMapFilePath == '\0') {
-	    strcpy(KeyMapFilePath, AppDataPath);
-		strcat(KeyMapFilePath, "\\");
-		strcat(KeyMapFilePath, "custom.keymap");
+    // Get keymap file names for each keymap type
+	for (Index = 0; Index < kKBLayoutCount; Index++) {
+	    GetPrivateProfileString("Misc",k_MapFileID[Index],"",
+		                         KeyMapFilePath[Index],MAX_PATH,IniFilePath);
+	    if (*KeyMapFilePath[Index] == '\0') {
+	        strcpy(KeyMapFilePath[Index], AppDataPath);
+		    strcat(KeyMapFilePath[Index], "\\");
+		    strcat(KeyMapFilePath[Index], k_keyMapFiles[Index]);
+		}
 	}
-
 
 	for (Index = 0; Index < NumberOfSoundCards; Index++)
 	{
@@ -528,13 +531,20 @@ char * AppDirectory()
 
 char * GetKeyMapFilePath()
 {
-	return KeyMapFilePath;
+	return KeyMapFilePath[CurrentConfig.KeyMap];
 }
 
 void SetKeyMapFilePath(char *Path)
 {
-    strcpy(KeyMapFilePath,Path);
-	WritePrivateProfileString("Misc","CustomKeyMapFile",KeyMapFilePath,IniFilePath);
+    strcpy(KeyMapFilePath[CurrentConfig.KeyMap],Path);
+    if (strlen(Path) > 0) {
+        WritePrivateProfileString("Misc",k_MapFileID[CurrentConfig.KeyMap],
+                                  KeyMapFilePath[CurrentConfig.KeyMap],IniFilePath);
+	} else {
+        WritePrivateProfileString("Misc",k_MapFileID[CurrentConfig.KeyMap],NULL,IniFilePath);
+    }
+//  Flush inifile
+    WritePrivateProfileString(NULL,NULL,NULL,IniFilePath);
 }
 
 void UpdateConfig (void)
@@ -920,23 +930,15 @@ LRESULT CALLBACK InputConfig(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPar
         break;
 
     case WM_COMMAND:
-		// If Custom keymap button pushed
-		if (LOWORD(wParam)==IDC_KEYMAPED) {
-			// Insure custom keyboard is selected.
-			if (TempConfig.KeyMap != kKBLayoutCustom) {
-				TempConfig.KeyMap = kKBLayoutCustom;
-				SendDlgItemMessage(hDlg,IDC_KBCONFIG,CB_SETCURSEL,
-				       (WPARAM)TempConfig.KeyMap,0);
-			}
-			// Run the keymap editor
-			DialogBox( EmuState.WindowInstance, (LPCTSTR) IDD_KEYMAPEDIT, hDlg,
-                       (DLGPROC) KeyMapProc );
-		} else {
-		    // Set temporary keymap to the one currently selected
-		    TempConfig.KeyMap = (unsigned char)
-			      SendDlgItemMessage(hDlg,IDC_KBCONFIG,CB_GETCURSEL,0,0);
-		}
-
+        // Set temporary keymap to the one currently selected
+        TempConfig.KeyMap = (unsigned char)
+        SendDlgItemMessage(hDlg,IDC_KBCONFIG,CB_GETCURSEL,0,0);
+        // If edit button run the keymap editor
+        if (LOWORD(wParam)==IDC_KEYMAPED) {
+            CurrentConfig.KeyMap = TempConfig.KeyMap;
+            DialogBox( EmuState.WindowInstance, (LPCTSTR) IDD_KEYMAPEDIT, hDlg,
+            (DLGPROC) KeyMapProc );
+        }
         break;
     }
     return(0);

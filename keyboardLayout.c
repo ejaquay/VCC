@@ -88,7 +88,7 @@
 	| [Cntl][   ][Alt][       Space       ][ @ ][   ][   ][Cntl]   [LftA][DnA][RgtA] |
 	+--------------------------------------------------------------------------------+
 	*/
-keytranslationentry_t keyTranslationsCoCo[] =
+keytranslationentry_t keyTranslationsCoCo[MAX_CTRANSTBLSIZ] =
 {
 	// ScanCode1,     ScanCode2,      Row1,  Col1,  Row2, Col2    Char  
 	{ DIK_A,          0,              1,     1,     0,    0 }, //   A
@@ -221,7 +221,7 @@ keytranslationentry_t keyTranslationsCoCo[] =
 	| [Cntl][   ][Alt][       Space       ][Alt][   ][   ][Cntl]   [LftA][DnA][RgtA]  |
 	+---------------------------------------------------------------------------------+
 	*/
-keytranslationentry_t keyTranslationsNatural[] =
+keytranslationentry_t keyTranslationsNatural[MAX_CTRANSTBLSIZ] =
 {
 	// ScanCode1,     ScanCode2,      Row1,  Col1,  Row2, Col2    Char  
 	{ DIK_A,          0,              1,     1,     0,    0 }, //   A
@@ -366,7 +366,7 @@ Differences from Natural layout:
 	CLR				TAB
 	ESC/BREAK		GRAVE (`)
 */
-keytranslationentry_t keyTranslationsCompact[] =
+keytranslationentry_t keyTranslationsCompact[MAX_CTRANSTBLSIZ] =
 {
 	// ScanCode1,     ScanCode2,      Row1,  Col1,  Row2, Col2    Char  
 	{ DIK_A,          0,              1,     1,     0,    0 }, //   A

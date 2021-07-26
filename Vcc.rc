@@ -224,7 +224,7 @@ BEGIN
     COMBOBOX        IDC_KBCONFIG,15,26,95,61,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     GROUPBOX        "Keyboard Mapping",IDC_STATIC,7,15,109,29,BS_CENTER
     PUSHBUTTON      "EDIT",IDC_KEYMAPED,31,74,50,14
-    LTEXT           "Edit Custom Keyboard",IDC_STATIC,23,64,73,8
+    LTEXT           "Edit current Mapping",IDC_STATIC,23,64,73,8
     GROUPBOX        "Keyboard Map Desciptions",IDC_STATIC,120,14,193,106
     LTEXT           "Coco (DECB): Layout physically resembles the Coco keyboard as close as possible.",IDC_STATIC,124,27,185,20
     LTEXT           "Natural (OS-9): Standard PC keyboard layout.",IDC_STATIC,121,52,187,15
@@ -325,7 +325,7 @@ END
 
 IDD_KEYMAPEDIT DIALOGEX 0, 0, 380, 235
 STYLE DS_SETFONT | DS_MODALFRAME | DS_NOIDLEMSG | DS_FIXEDSYS | WS_POPUP | WS_CAPTION
-CAPTION "Edit Custom Key Map"
+CAPTION "Edit Key Map"
 FONT 8, "MS Sans Serif", 0, 0, 0x1
 BEGIN
     LTEXT           "CoCo Key",IDC_STATIC,22,152,38,8
@@ -334,13 +334,13 @@ BEGIN
     LTEXT           "Click on keys above to change the mapping",IDC_STATIC,186,156,180,10
     LTEXT           "Optionally toggle SHIFT, CTRL, or ALT modifier key",IDC_STATIC,186,166,180,10
     LTEXT           "Click 'Set' button to confirm each change",IDC_STATIC,186,176,180,12
-    LTEXT           "Click 'Save Keymap' to make changes permanent",IDC_STATIC,186,186,180,12
+    LTEXT           "Click 'Remove File' to remove keymap file",IDC_STATIC,186,186,180,12
     RTEXT           "",IDC_KEYMAP_FILE,140,21,150,12,SS_NOPREFIX | SS_REALSIZEIMAGE,WS_EX_CLIENTEDGE
     LTEXT           "",IDC_CCKEY_TXT,56,151,75,12,SS_REALSIZEIMAGE,WS_EX_CLIENTEDGE
     LTEXT           "",IDC_PCKEY_TXT,56,172,75,12,SS_REALSIZEIMAGE,WS_EX_CLIENTEDGE
     PUSHBUTTON      " Exit ",IDC_KEYMAP_EXIT,304,18,50,18,NOT WS_TABSTOP
     PUSHBUTTON      "Select File",IDC_LOAD_KEYMAP,78,18,52,18,BS_MULTILINE
-    PUSHBUTTON      "Save Keymap",IDC_SAVE_KEYMAP,22,18,52,18,BS_MULTILINE
+    PUSHBUTTON      "Remove File",IDC_REMOVE_KEYMAP,22,18,52,18,BS_MULTILINE
     PUSHBUTTON      " Set ",IDC_SET_CUST_KEYMAP,136,145,40,20,NOT WS_TABSTOP
     PUSHBUTTON      "Clear",IDC_CLR_CUST_KEYMAP,136,170,40,20,NOT WS_TABSTOP
     GROUPBOX        "",IDC_STATIC,21,41,333,98

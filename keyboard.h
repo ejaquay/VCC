@@ -59,6 +59,28 @@ const char * const k_keyboardLayoutNames[] =
 	"Custom"
 } ;
 
+/*
+	Default Keyboard map file names used to save
+	modified keymaps to disk.
+*/
+const char * const k_keyMapFiles[] =
+{
+	"coco.keymap",
+	"natural.keymap",
+	"compact.keymap",
+	"custom.keymap"
+} ;
+/*
+	Strings used to identify file names from init file
+*/
+const char * const k_MapFileID[] =
+{
+	"CoCoKeyMapFile",
+	"NaturalKeyMapFile",
+	"CompactKeyMapFile",
+	"CustomKeyMapFile"
+} ;
+
 /**
 */
 typedef struct keytranslationentry_t

@@ -307,7 +307,7 @@
 
 // Other key map editor controls
 #define IDC_LOAD_KEYMAP                 1150
-#define IDC_SAVE_KEYMAP                 1151
+#define IDC_REMOVE_KEYMAP               1151
 #define IDC_KEYMAP_EXIT                 1152
 #define IDC_SET_CUST_KEYMAP             1153
 #define IDC_CLR_CUST_KEYMAP             1154
