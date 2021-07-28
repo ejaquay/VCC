@@ -76,8 +76,8 @@ int UserWarned = 0;
 HBRUSH hbrTextBox = NULL;
 HFONT  hfTextBox  = NULL;
 
-// Keymap data changed flag
-BOOL KeyMapChanged = FALSE;
+BOOL KeyMapChanged = FALSE; // Keymap data changed flag
+BOOL MapFileExists = FALSE; // Keymap file exists flag
 
 // Forward references
 BOOL  InitKeymapDialog(HWND);
@@ -153,9 +153,13 @@ int LoadCustomKeyMap(char* keymapfile)
         return 1;
     }
 
+	MapFileExists = TRUE; // Set file exists flag
+	EnableWindow(GetDlgItem(hKeyMapDlg,IDC_REMOVE_KEYMAP),MapFileExists);
+
 	// load table from file
     memset (table,0,sizeof(keytranslationentry_t)*MAX_CTRANSTBLSIZ);
-    while (fgets(buf,250,keymap)) {
+
+	while (fgets(buf,250,keymap)) {
         // Get line from file, save valid entries in table
         if (GetKeymapLine(buf, &table[ndx], ++lnum) == 0) {
             ndx++;
@@ -292,6 +296,10 @@ BOOL WriteKeymap(char* keymapfile)
 		return FALSE;
 	}
 
+    // Set file exists flag
+	MapFileExists = TRUE;
+	EnableWindow(GetDlgItem(hKeyMapDlg,IDC_REMOVE_KEYMAP),MapFileExists);
+
     // If there was already a file by name specified
 	if (PathFileExists(keymapfile)) {
 		// Open the existing file
@@ -330,7 +338,6 @@ BOOL WriteKeymap(char* keymapfile)
         MessageBox(hKeyMapDlg,tmpfile,"Rename error",0);
 		return FALSE;
 	}
-
 	return TRUE;
 }
 
@@ -614,7 +621,7 @@ BOOL InitKeymapDialog(HWND hWnd)
     CoCoKeySet = 0;
 	CoCoModSet = 0;
 
-//	EnableWindow(GetDlgItem(hKeyMapDlg,IDC_SAVE_KEYMAP),KeyMapChanged);
+	EnableWindow(GetDlgItem(hKeyMapDlg,IDC_REMOVE_KEYMAP),FALSE);
 	EnableWindow(GetDlgItem(hKeyMapDlg,IDC_SET_CUST_KEYMAP),FALSE);
 	EnableWindow(GetDlgItem(hKeyMapDlg,IDC_CLR_CUST_KEYMAP),FALSE);
 
@@ -626,8 +633,13 @@ BOOL InitKeymapDialog(HWND hWnd)
 
 	SetWindowTextA(hWnd,Title);
 
-    // keymap filename
+    // Fill in keymap filename
 	SendMessage(hText_MapFile, WM_SETTEXT, 0, (LPARAM) GetKeyMapFilePath());
+
+	MapFileExists = FALSE; // Clear file exists flag until successful open
+
+	// Attempt to load custom keymap
+     LoadCustomKeyMap(GetKeyMapFilePath());
 
 	// Subclass hText_PC to handle PC keyboard
 	Text_PCproc = (WNDPROC)GetWindowLongPtr(hText_PC, GWLP_WNDPROC);
@@ -709,7 +721,7 @@ BOOL SelectCustKeymapFile() {
 }
 
 //-----------------------------------------------------
-// Save custom keymap file
+// Save modified keymap to a file
 //-----------------------------------------------------
 BOOL SaveCustKeymap() {
 	if (KeyMapChanged) {
@@ -733,11 +745,9 @@ BOOL RemoveCustomKeymap() {
             DeleteFile(file);
             SetKeyMapFilePath("");
             SendMessage(hText_MapFile, WM_SETTEXT, 0, (LPARAM) "");
+	        MapFileExists = FALSE; // Clear file exists flag
+	        EnableWindow(GetDlgItem(hKeyMapDlg,IDC_REMOVE_KEYMAP),MapFileExists);
         }
-    } else {
-        MessageBox(hKeyMapDlg,
-            "This keymap file does not exist. If needed restarting Vcc will "
-			"restore defaults.", "Info",0);
     }
     KeyMapChanged = FALSE;
     return TRUE;
