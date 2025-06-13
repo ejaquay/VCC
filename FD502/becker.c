@@ -21,7 +21,6 @@
 //
 //---------------------------------------------------------------------------------
 
-#define USE_LOGGING
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include <winsock2.h>
