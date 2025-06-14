@@ -20,7 +20,7 @@
 // deletions, changed external calls, and some variable name changes.
 //
 //---------------------------------------------------------------------------------
-
+//#define USE_LOGGING
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include <winsock2.h>
@@ -219,7 +219,7 @@ int dw_write( char dwdata)
 	if ((dwSocket != 0) & (!retry)) {
 		int res = send(dwSocket, &dwdata, 1, 0);
 		if (res != 1) {
-			_DLOG("dw_write: socket error %d\n", WSAGetLastError());
+			_DLOG("dw_write socket error %d\n", WSAGetLastError());
 			closesocket(dwSocket);
 			dwSocket = 0;
 		} else {
@@ -227,7 +227,7 @@ int dw_write( char dwdata)
         }
 
 	} else {
-		_DLOG("coco write but null socket\n");
+		_DLOG("dw_write null socket\n");
 	}
 	return(0);
 }
@@ -235,6 +235,7 @@ int dw_write( char dwdata)
 void dw_close(void)
 {
 	// close socket to cause io thread to die
+	_DLOG("dw_close\n");
 	if (dwSocket != 0) closesocket(dwSocket);
 	dwSocket = 0;
 	InReadPos = 0;
@@ -245,15 +246,14 @@ void dw_close(void)
 // try to connect with DW server
 void dw_open( void )
 {
+	_DLOG("dw_open %s:%d\n",dwaddress,dwsport);
+
 	retry = true;
 	BOOL bOptValTrue = TRUE;
 	int iOptValTrue = 1;
 
-	if (*dwaddress == '\0') strcpy(dwaddress, "127.0.0.1");
 	strcpy(curaddress, dwaddress);
-	curport= dwsport;
-
-	_DLOG("Connecting to %s:%d...\n",dwaddress,dwsport);
+	curport = dwsport;
 
 	// resolve hostname
 	LPHOSTENT dwSrvHost= gethostbyname(dwaddress);
@@ -261,14 +261,14 @@ void dw_open( void )
 	if (dwSrvHost == NULL) {
 	// invalid hostname/no dns
 		retry = false;
-		_DLOG("failed to resolve hostname.\n");
+		_DLOG("dw_open failed to resolve hostname\n");
 	}
         
 	// allocate socket
 	dwSocket = socket (AF_INET,SOCK_STREAM,IPPROTO_TCP);
 	if (dwSocket == INVALID_SOCKET) {
 		retry = false;
-		_DLOG("invalid socket.\n");
+		_DLOG("dw_open invalid socket\n");
 	}
 
 	// set options
@@ -289,7 +289,7 @@ void dw_open( void )
 	retry = false;
 
 	if (rc==SOCKET_ERROR) {
-		_DLOG("failed to connect.\n");
+		_DLOG("dw_open failed to connect\n");
 		closesocket(dwSocket);
     	dwSocket = 0;
 	}
@@ -298,19 +298,21 @@ void dw_open( void )
 // TCP connection thread
 unsigned __stdcall dw_thread(void *Dummy)
 {
+	_DLOG("dw_thread %d\n",dwEnabled);
 	HANDLE hEvent = (HANDLE)Dummy;
 	WSADATA wsaData;
         
 	int sz;
 	int res;
 
-	// Request Winsock version 2.2
-	if ((WSAStartup(0x202, &wsaData)) != 0) {
-		_DLOG("WSAStartup() failed, DWTCPConnection thread exiting\n");
-		WSACleanup();
-		return(0);
+	if (dwEnabled) {
+		// Request Winsock version 2.2
+		if ((WSAStartup(0x202, &wsaData)) != 0) {
+			_DLOG("dw_thread winsock startup failed, exiting\n");
+			WSACleanup();
+			return(0);
+		}
 	}
-
 	while(dwEnabled) {
 		// get connected
 		dw_open();

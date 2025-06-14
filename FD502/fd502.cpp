@@ -17,21 +17,23 @@ This file is part of VCC (Virtual Color Computer).
 */
 /********************************************************************************************
 *	fd502.cpp : Defines the entry point for the DLL application.							*
-*	DLL for use with Vcc 1.0 or higher. DLL interface 1.0 Beta								* 
-*	This Module will emulate a Tandy Floppy Disk Model FD-502 With 3 DSDD drives attached	* 
+*	DLL for use with Vcc 1.0 or higher. DLL interface 1.0 Beta								*
+*	This Module will emulate a Tandy Floppy Disk Model FD-502 With 3 DSDD drives attached	*
 *	Copyright 2006 (c) by Joseph Forgione 													*
 *********************************************************************************************/
 
+//#define USE_LOGGING
 #include <windows.h>
 #include <stdio.h>
 #include <iostream>
-#include "resource.h" 
+#include "resource.h"
 #include "wd1793.h"
 #include "distortc.h"
 #include "becker.h"
 #include "fd502.h"
 #include "../fileops.h"
 #include "../MachineDefs.h"
+#include "../debugger.h"
 #define EXTROMSIZE 16384
 
 using namespace std;
@@ -87,7 +89,7 @@ BOOL WINAPI DllMain(
     DWORD fdwReason,     // reason for calling function
     LPVOID lpReserved )  // reserved
 {
-	if (fdwReason == DLL_PROCESS_DETACH ) //Clean Up 
+	if (fdwReason == DLL_PROCESS_DETACH ) //Clean Up
 	{
 		for (unsigned char Drive=0;Drive<=3;Drive++)
 			unmount_disk_image(Drive);
@@ -101,8 +103,8 @@ BOOL WINAPI DllMain(
 	return(1);
 }
 
-extern "C" 
-{          
+extern "C"
+{
 	__declspec(dllexport) void ModuleName(char *ModName,char *CatNumber,DYNAMICMENUCALLBACK Temp)
 	{
 		int ErrorNumber=0;
@@ -115,8 +117,8 @@ extern "C"
 	}
 }
 
-extern "C" 
-{          
+extern "C"
+{
 	__declspec(dllexport) void ModuleConfig(unsigned char MenuID)
 	{
 		HWND h_own = GetActiveWindow();
@@ -160,7 +162,7 @@ extern "C"
 	}
 }
 
-extern "C" 
+extern "C"
 {
 	__declspec(dllexport) void SetIniPath (char *IniFilePath)
 	{
@@ -170,8 +172,8 @@ extern "C"
 	}
 }
 
-// This captures the Fuction transfer point for the CPU assert interupt 
-extern "C" 
+// This captures the Fuction transfer point for the CPU assert interupt
+extern "C"
 {
 	__declspec(dllexport) void AssertInterupt(ASSERTINTERUPT Dummy)
 	{
@@ -180,8 +182,8 @@ extern "C"
 	}
 }
 
-extern "C" 
-{         
+extern "C"
+{
 	__declspec(dllexport) void PackPortWrite(unsigned char Port,unsigned char Data)
 	{
 		if (Port == 0x42)         // Enabled?
@@ -223,8 +225,8 @@ extern "C"
 	}
 }
 
-extern "C" 
-{          
+extern "C"
+{
 	__declspec(dllexport) void ModuleStatus(char *MyStatus)
 	{
 		char diskstat[64];
@@ -289,7 +291,7 @@ LRESULT CALLBACK Config(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 			SendDlgItemMessage (hDlg,IDC_BECKER_HOST,WM_SETTEXT,0,(LPARAM)(LPSTR)BeckerAddr);
 			SendDlgItemMessage (hDlg,IDC_BECKER_PORT,WM_SETTEXT,0,(LPARAM)(LPCSTR)BeckerPort);
 
-			return TRUE; 
+			return TRUE;
 		break;
 
 		case WM_COMMAND:
@@ -389,14 +391,14 @@ void Load_Disk(unsigned char disk)
 	HANDLE hr=NULL;
 	OPENFILENAME ofn ;	
 	unsigned char FileNotSelected=0;
-	if (DialogOpen ==1)	//Only allow 1 dialog open 
+	if (DialogOpen ==1)	//Only allow 1 dialog open
 		return;
 	DialogOpen=1;
 	FileNotSelected=1;
 
 	while (FileNotSelected)
 	{
-		CreateFlag=1; 
+		CreateFlag=1;
 		memset(&ofn,0,sizeof(ofn));
 		ofn.lStructSize       = sizeof (OPENFILENAME);
 		ofn.hwndOwner		  = NULL;
@@ -415,7 +417,7 @@ void Load_Disk(unsigned char disk)
 		if ( GetOpenFileName(&ofn) )
 		{
 			hr=CreateFile(TempFileName,NULL,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,NULL);
-			if (hr==INVALID_HANDLE_VALUE) 
+			if (hr==INVALID_HANDLE_VALUE)
 			{
 				NewDiskNumber=disk;
 				HWND h_own = GetActiveWindow();
@@ -496,7 +498,7 @@ void BuildDynaMenu(void)
 	PathStripPath(TempBuf);
 	strcat(TempMsg,TempBuf);
 	DynamicMenuCallback( TempMsg,5018,SLAVE);
-//NEW 
+//NEW
 	DynamicMenuCallback( "FD-502 Config",5016,STANDALONE);
 	DynamicMenuCallback( "",1,0);
 }
@@ -528,7 +530,7 @@ LRESULT CALLBACK NewDisk(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 			strcpy(Dummy,TempFileName);
 			PathStripPath(Dummy);
 			SendDlgItemMessage(hDlg,IDC_TEXT1,WM_SETTEXT,0,(LPARAM)(LPCSTR)Dummy);	
-			return TRUE; 
+			return TRUE;
 		break;
 
 		case WM_COMMAND:
@@ -599,7 +601,7 @@ long CreateDiskHeader(char *FileName,unsigned char Type,unsigned char Tracks,uns
 	unsigned char IgnoreDensity=0,SingleDensity=0,HeaderSize=0;
 	unsigned long BytesWritten=0,FileSize=0;
 	hr=CreateFile( FileName,GENERIC_READ | GENERIC_WRITE,0,0,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,0);
-	if (hr==INVALID_HANDLE_VALUE) 
+	if (hr==INVALID_HANDLE_VALUE)
 		return(1); //Failed to create File
 
 	switch (Type)
@@ -669,12 +671,20 @@ void LoadConfig(void)  // Called on SetIniPath
 	char DiskName[MAX_PATH]="";
 	unsigned int RetVal=0;
 	HANDLE hr=NULL;
+
+	strcpy(ModName,"HDBDOS/DW/Becker");
+	BeckerEnabled=GetPrivateProfileInt(ModName,"DWEnable", 0, IniFile);
+	GetPrivateProfileString(ModName,"DWServerAddr","127.0.0.1",BeckerAddr,MAX_PATH,IniFile);
+	GetPrivateProfileString(ModName,"DWServerPort","65504",BeckerPort,32,IniFile);
+	becker_sethost(BeckerAddr,BeckerPort);
+	becker_enable(BeckerEnabled);
+
 	LoadString(g_hinstDLL,IDS_MODULE_NAME,ModName, MAX_LOADSTRING);
 	GetPrivateProfileString("DefaultPaths", "FloppyPath", "", FloppyPath, MAX_PATH, IniFile);
 	
 	SelectRom = GetPrivateProfileInt(ModName,"DiskRom",1,IniFile);  //0 External 1=TRSDOS 2=RGB Dos
 	GetPrivateProfileString(ModName,"RomPath","",RomFileName,MAX_PATH,IniFile);
-	PersistDisks=GetPrivateProfileInt(ModName,"Persist",1,IniFile);  
+	PersistDisks=GetPrivateProfileInt(ModName,"Persist",1,IniFile);
 	CheckPath(RomFileName);
 	LoadExtRom(External,RomFileName); //JF
 	GetModuleFileName(NULL, DiskRomPath, MAX_PATH);
@@ -702,15 +712,8 @@ void LoadConfig(void)  // Called on SetIniPath
 				}
 			}
 		}
-	ClockEnabled=GetPrivateProfileInt(ModName,"ClkEnable",1,IniFile); 
+	ClockEnabled=GetPrivateProfileInt(ModName,"ClkEnable",1,IniFile);
 	SetTurboDisk(GetPrivateProfileInt(ModName, "TurboDisk", 1, IniFile));
-
-    strcpy(ModName,"HDBDOS/DW/Becker");
-	BeckerEnabled=GetPrivateProfileInt(ModName,"DWEnable", 0, IniFile);
-	GetPrivateProfileString(ModName,"DWServerAddr","127.0.0.1",BeckerAddr,MAX_PATH,IniFile);
-	GetPrivateProfileString(ModName,"DWServerPort","65504",BeckerPort,32,IniFile);	
-	becker_sethost(BeckerAddr,BeckerPort);
-	becker_enable(BeckerEnabled);
 
 	BuildDynaMenu();
 	return;
@@ -734,8 +737,8 @@ void SaveConfig(void)
 		}
 	WritePrivateProfileInt(ModName,"ClkEnable",ClockEnabled ,IniFile);
 	WritePrivateProfileInt(ModName, "TurboDisk", SetTurboDisk(QUERY), IniFile);
-	if (strcmp(FloppyPath, "") != 0) { 
-		WritePrivateProfileString("DefaultPaths", "FloppyPath", FloppyPath, IniFile); 
+	if (strcmp(FloppyPath, "") != 0) {
+		WritePrivateProfileString("DefaultPaths", "FloppyPath", FloppyPath, IniFile);
 	}
 
     strcpy(ModName,"HDBDOS/DW/Becker");
