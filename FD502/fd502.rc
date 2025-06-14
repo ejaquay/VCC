@@ -189,7 +189,7 @@ STRINGTABLE
 BEGIN
     IDS_MODULE_NAME         "FD-502"
     IDS_VERSION             "3.0.1"
-    IDS_CATNUMBER           "26-3133"
+    IDS_CATNUMBER           "Becker"
 END
 
 #endif    // English (United States) resources
