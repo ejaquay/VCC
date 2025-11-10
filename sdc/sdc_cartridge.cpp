@@ -202,10 +202,10 @@ struct Interface
     unsigned char param3;
     unsigned char reply_mode;  // 0=words, 1=bytes
     unsigned char reply_status;
-    unsigned char half_sent;
+    unsigned char half_word_sent;
     int bufcnt;
     char *bufptr;
-    char blkbuf[600];
+    char blkbuf[520];
 };
 
 // Packed file records for directory list
@@ -246,11 +246,11 @@ void WriteSector();
 bool SeekSector(unsigned char,unsigned int);
 bool ReadDrive(unsigned char,unsigned int);
 void GetDriveInfo();
-void SDCControl();
+void AbortStream();
 void UpdateSD();
-void AppendPathChar(char *,char c);
+void AppendPathChar(char* path, char c);
 bool LoadFoundFile(struct FileRecord *);
-void FixSDCPath(char *,const char *);
+void UnpackPath(char *,const char *);
 void MountDisk(int,const char *,int);
 void MountNewDisk(int,const char *,int);
 void OpenNew(int,const char *,int);
@@ -271,7 +271,7 @@ void GetMountedImageRec();
 void GetSectorCount();
 void GetDirectoryLeaf();
 void CommandDone();
-unsigned char PickReplyByte(unsigned char);
+unsigned char GetReplyByte(unsigned char);
 void FloppyCommand(unsigned char);
 void FloppyRestore(unsigned char);
 void FloppySeek(unsigned char);
@@ -284,6 +284,8 @@ unsigned char FloppyStatus();
 unsigned char FloppyReadData();
 void set_filerecord_file_size(FileRecord& , uint32_t);
 void set_sdcfile_from_filename(SdcFile&, const std::string& );
+bool ReadRomFile(unsigned char);
+bool WriteRomFile(unsigned char);
 
 //======================================================================
 // Public Data
@@ -299,7 +301,7 @@ PakAppendCartridgeMenuHostCallback CartMenuCallback = nullptr;
 int idle_ctr = 0;
 
 // Cart ROM
-char PakRom[0x4000];
+unsigned char PakRom[0x4000];
 
 // Host paths for SDC
 char IniFile[MAX_PATH] = {}; // Vcc ini file name
@@ -326,7 +328,6 @@ static struct FileRecord DirPage[16] = {};
 static struct DiskImage Disk[2] = {};
 
 // Flash banks
-static FILE *h_RomFile = nullptr;
 static unsigned char BankWriteNum = 0;
 static unsigned char BankDirty = 0;
 static unsigned char BankData = 0;
@@ -361,7 +362,10 @@ void SDCInit()
     MoveWindow(GetConsoleWindow(),0,0,300,800,TRUE);
 #endif
 
-    // Init the hFind handle (otherwise could crash on dll load)
+    // Shut down streaming if in progress
+    AbortStream();
+
+    // Init the hFind handle
     hFind = INVALID_HANDLE_VALUE;
 
     // Make sure drives are unloaded
@@ -386,73 +390,55 @@ void SDCInit()
 }
 
 //-------------------------------------------------------------
-// Load rom from flash bank
+// Read bank file into ROM
+//-------------------------------------------------------------
+bool ReadRomFile(unsigned char bank)
+{
+    FILE *f = fopen(FlashFile[bank],"rb");
+    if (f == nullptr) return false;
+    memset(PakRom, 0xFF, 0x4000);
+    std::fread(PakRom, 1, 0x4000, f);
+    fclose(f);
+    return true;
+}
+
+//-------------------------------------------------------------
+// Write bank file from ROM
+//-------------------------------------------------------------
+bool WriteRomFile(unsigned char bank)
+{
+    FILE *f = fopen(FlashFile[bank],"wb");
+    if (f == nullptr) return false;
+    std::fwrite(PakRom, 1, 0x4000, f);
+    fclose(f);
+    return true;
+}
+
+//-------------------------------------------------------------
+// Load ROM from flash bank
 //-------------------------------------------------------------
 void LoadRom(unsigned char bank)
 {
-
-    unsigned char ch;
-    int ctr = 0;
-    char *p_rom;
-    char *RomFile;
-
     if (bank == CurrentBank) return;
 
-    // Make sure flash file is closed
-    if (h_RomFile) {
-        fclose(h_RomFile);
-        h_RomFile = nullptr;
-    }
-
     if (BankDirty) {
-        RomFile = FlashFile[CurrentBank];
-        DLOG_C("LoadRom switching out dirty bank %d %s\n",CurrentBank,RomFile);
-        h_RomFile = fopen(RomFile,"wb");
-        if (h_RomFile == nullptr) {
-            DLOG_C("LoadRom failed to open bank file%d\n",bank);
-        } else {
-            ctr = 0;
-            p_rom = PakRom;
-            while (ctr++ < 0x4000) fputc(*p_rom++, h_RomFile);
-            fclose(h_RomFile);
-            h_RomFile = nullptr;
-        }
+        WriteRomFile(CurrentBank);
         BankDirty = 0;
     }
 
+    // Allow SDC-DOS to work with broken config.  If the bank
+    // is empty and is the StartupBank then load SDC-DOS.
+    if (*FlashFile[bank] == '\0' && bank == StartupBank) {
+        DLOG_C("LoadRom loading default SDC-DOS\n");
+        strncpy(FlashFile[bank],"SDC-DOS.ROM",MAX_PATH);
+    }
     DLOG_C("LoadRom load flash bank %d\n",bank);
-    RomFile = FlashFile[bank];
-    CurrentBank = bank;
 
-    // If bank is empty and is the StartupBank load SDC-DOS
-    if (*FlashFile[CurrentBank] == '\0') {
-        DLOG_C("LoadRom bank %d is empty\n",CurrentBank);
-        if (CurrentBank == StartupBank) {
-            DLOG_C("LoadRom loading default SDC-DOS\n");
-            strncpy(RomFile,"SDC-DOS.ROM",MAX_PATH);
-        }
-    }
+    if (ReadRomFile(bank))
+        CurrentBank = bank;
+    else
+        CurrentBank = 0xff;
 
-    // Open romfile for read or write if not startup bank
-    h_RomFile = fopen(RomFile,"rb");
-    if (h_RomFile == nullptr) {
-        if (CurrentBank != StartupBank) h_RomFile = fopen(RomFile,"wb");
-    }
-    if (h_RomFile == nullptr) {
-        DLOG_C("LoadRom '%s' failed %s \n",RomFile,LastErrorTxt());
-        return;
-    }
-
-    // Load rom from flash
-    memset(PakRom, 0xFF, 0x4000);
-    ctr = 0;
-    p_rom = PakRom;
-    while (ctr++ < 0x4000) {
-        if ((ch = fgetc(h_RomFile)) < 0) break;
-        *p_rom++ = (char) ch;
-    }
-
-    fclose(h_RomFile);
     return;
 }
 
@@ -637,7 +623,7 @@ unsigned char SDCRead(unsigned char port)
         // Reply data 2 or block reply
         case 0x4A:
             if (IF.bufcnt > 0) {
-                rpy = PickReplyByte(port);
+                rpy = GetReplyByte(port);
             } else {
                 rpy = IF.reply2;
             }
@@ -645,7 +631,7 @@ unsigned char SDCRead(unsigned char port)
         // Reply data 3 or block reply
         case 0x4B:
             if (IF.bufcnt > 0) {
-                rpy = PickReplyByte(port);
+                rpy = GetReplyByte(port);
             } else {
                 rpy = IF.reply3;
             }
@@ -804,9 +790,9 @@ unsigned char FloppyReadData()
 //----------------------------------------------------------------------
 // Can't reply with words, only bytes.  But the SDC interface design
 // has most replies in words and the order the word bytes are read can
-// vary so we play games to send the right ones
+// vary so we must be sure to send the right ones.
 //----------------------------------------------------------------------
-unsigned char PickReplyByte(unsigned char port)
+unsigned char GetReplyByte(unsigned char port)
 {
     unsigned char rpy = 0;
 
@@ -816,19 +802,22 @@ unsigned char PickReplyByte(unsigned char port)
             rpy = *IF.bufptr++;
             IF.bufcnt--;
         }
-    // Word mode bytes come on port 0x4A and 0x4B
+    // Word mode bytes are on ports 0x4A and 0x4B.
+    // Reads can be in reversed order.
     } else {
+        // Send bytes in the correct order
         if (port == 0x4A) {
             rpy = IF.bufptr[0];
         } else {
             rpy = IF.bufptr[1];
         }
-        if (IF.half_sent) {
+        // Adjust bufptr after both bytes sent
+        if (IF.half_word_sent) {
             IF.bufcnt -= 2;
             IF.bufptr += 2;
-            IF.half_sent = 0;
+            IF.half_word_sent = 0;
         } else {
-            IF.half_sent = 1;
+            IF.half_word_sent = 1;
         }
     }
 
@@ -859,7 +848,7 @@ void SDCCommand()
         break;
      // Control SDC
     case 0xD0:
-        SDCControl();
+        AbortStream();
         break;
     // Next two are block receive commands
     case 0xA0:
@@ -867,7 +856,7 @@ void SDCCommand()
         IF.status = STA_READY | STA_BUSY;
         IF.bufptr = IF.blkbuf;
         IF.bufcnt = 256;
-        IF.half_sent = 0;
+        IF.half_word_sent = 0;
         break;
     }
     return;
@@ -960,7 +949,7 @@ void GetDirectoryLeaf()
 
     // If at least one leaf find the last one
     if (n > 0) {
-		const char *p = strrchr(CurDir,'/');
+        const char *p = strrchr(CurDir,'/');
         if (p == nullptr) {
             p = CurDir;
         } else {
@@ -1306,23 +1295,15 @@ void GetMountedImageRec()
 }
 
 //----------------------------------------------------------------------
-// $DO Abort stream and mount disk in a set of disks.
-// IF.param1  0: Next disk 1-9: specific disk.
-// IF.param2 b0: Blink Enable
+// Abort stream.
 //----------------------------------------------------------------------
-void SDCControl()
+void AbortStream()
 {
-    // If streaming is in progress abort it.
     if (streaming) {
         DLOG_C ("Streaming abort");
         streaming = 0;
         IF.status = STA_READY;
         IF.bufcnt = 0;
-    } else {
-        // TODO: Mount in set
-        DLOG_C("SDCControl Mount in set unsupported %d %d %d \n",
-                  IF.cmdcode,IF.param1,IF.param2);
-        IF.status = STA_FAIL | STA_NOTFOUND;
     }
 }
 
@@ -1340,7 +1321,7 @@ void LoadReply(const void *data, int count)
 
     IF.bufptr = IF.blkbuf;
     IF.bufcnt = count;
-    IF.half_sent = 0;
+    IF.half_word_sent = 0;
 
     // If port reads exceed the count zeros will be returned
     IF.reply2 = 0;
@@ -1373,9 +1354,9 @@ void set_sdcfile_from_filename(SdcFile& sdcfile, const std::string& filename) {
 
 //----------------------------------------------------------------------
 // SDC uses a packed 8.3 format but users will usually input paths with
-// normalized format. FixSDCPath normalizes a path if it is 8.3 packed.
+// normalized format. UnpackPath normalizes a path if it is 8.3 packed.
 //----------------------------------------------------------------------
-void FixSDCPath(char *dst, const char *src, std::size_t dst_size)
+void UnpackPath(char *dst, const char *src, std::size_t dst_size)
 {
     if (!dst || !src || dst_size == 0) return;
 
@@ -1394,18 +1375,19 @@ void FixSDCPath(char *dst, const char *src, std::size_t dst_size)
     std::size_t name_len = 0;
     bool dot_inserted = false;
 
-    // Copy name and extension with paked format conversion
-    while (src[src_ndx] != '\0' && dst_ndx + 1 < dst_size) {
+    // Copy name and extension with packed format conversion.
+    // First blank, dot, or eighth char starts the extension.
+    // Blanks are trimmed from output.
+    // Make sure there is space for copied chars and maybe a dot.
+    while (src[src_ndx] != '\0' && dst_ndx + 2 < dst_size) {
         char ch = src[src_ndx++];
         if ((ch == ' ' || ch == '.') && !dot_inserted) {
-            if (dst_ndx + 1 < dst_size) {
-                dst[dst_ndx++] = '.';
-                dot_inserted = true;
-            }
+            dst[dst_ndx++] = '.';
+            dot_inserted = true;
         } else if (ch != ' ') {
             dst[dst_ndx++] = ch;
             if (!dot_inserted) {
-                if (++name_len == 8 && dst_ndx + 1 < dst_size) {
+                if (++name_len == 8) {
                     dst[dst_ndx++] = '.';
                     dot_inserted = true;
                 }
@@ -1476,7 +1458,7 @@ void MountNewDisk (int drive, const char * path, int raw)
 
     // Convert from 8.3 format if used
     char file[MAX_PATH];
-    FixSDCPath(file,path,MAX_PATH);
+    UnpackPath(file,path,MAX_PATH);
 
     // Look for pre-existing file
     if (SearchFile(file)) {
@@ -1494,7 +1476,6 @@ void MountNewDisk (int drive, const char * path, int raw)
 // If there is no '.' in the path first appending '.DSK' will be
 // tried then wildcard. If wildcarded the set will be available for
 // the 'Next Disk' function.
-// TODO: Sets of type SOMEAPPn.DSK
 //----------------------------------------------------------------------
 void MountDisk (int drive, const char * path, int raw)
 {
@@ -1513,25 +1494,23 @@ void MountDisk (int drive, const char * path, int raw)
         return;
     }
 
-    char file[MAX_PATH];
-    char tmp[MAX_PATH];
-
     // Convert from 8.3 format if used
-    FixSDCPath(file,path,MAX_PATH);
+    char file[MAX_PATH];
+    UnpackPath(file,path,MAX_PATH);
 
     // Look for the file
     bool found = SearchFile(file);
 
-    // if no '.' in the name try appending .DSK  or wildcard
+    // IF fails and no '.' in the name try appending *.DSK
     if (!found && (strchr(file,'.') == nullptr)) {
-        strncpy(tmp,file,MAX_PATH);
-        strncat(tmp,".DSK",MAX_PATH);
-        found = SearchFile(tmp);
-        if(!found) {
-            strncpy(tmp,file,MAX_PATH);
-            strncat(tmp,"*.*",MAX_PATH);
-            found = SearchFile(tmp);
-        }
+        std::string s = std::string(file) + "*.DSK";
+        found = SearchFile(s.c_str());
+    }
+
+    // Next try just appending an "*" (possibly mounts directory)
+    if(!found) {
+        std::string s = std::string(file) + "*";
+        found = SearchFile(s.c_str());
     }
 
     // Give up
@@ -1603,16 +1582,10 @@ void OpenNew( int drive, const char * path, int raw)
         return;
     }
 
-    // Contruct fully qualified file name
     char fqn[MAX_PATH]={};
-    strncpy(fqn,SDCard,MAX_PATH);
-    AppendPathChar(fqn,'/');
-    strncat(fqn,CurDir,MAX_PATH);
-    AppendPathChar(fqn,'/');
-    strncat(fqn,path,MAX_PATH);
+    GetFullPath(fqn,path);
 
-    // Trying to mount a directory. Find .DSK files in the ending
-    // with a digit and mount the first one.
+    // Trying to mount a directory.
     if (IsDirectory(fqn)) {
         DLOG_C("OpenNew %s is a directory\n",fqn);
         IF.status = STA_FAIL | STA_INVALID;
@@ -1691,7 +1664,7 @@ void OpenFound (int drive,int raw)
         AppendPathChar(path,'/');
         strncat(path,"*.DSK",MAX_PATH);
         InitiateDir(path);
-        // TODO Fix this nonsensical recursion
+        // recursion
         if (IF.status == STA_NORMAL) OpenFound(drive,0);
         return;
     }
@@ -1822,7 +1795,7 @@ void GetFullPath(char * path, const char * file) {
     AppendPathChar(path,'/');
     strncat(path,CurDir,MAX_PATH);
     AppendPathChar(path,'/');
-    FixSDCPath(tmp,file,MAX_PATH);
+    UnpackPath(tmp,file,MAX_PATH);
     strncat(path,tmp,MAX_PATH);
 }
 
@@ -1924,15 +1897,15 @@ void CloseDrive (int drive)
 }
 
 //----------------------------------------------------------------------
-// Append char to path if not there
+// Append character `c` to `path` if not already present at the end.
 //----------------------------------------------------------------------
-void AppendPathChar(char * path, char c)
+void AppendPathChar(char* path, char c)
 {
-    int l = strlen(path);
-    if ((l > 0) && (path[l-1] == c)) return;
-    if (l > (MAX_PATH-2)) return;
-    path[l] = c;
-    path[l+1] = '\0';
+    if (!path) return;
+    size_t len = strlen(path);
+    if (len == 0 || path[len - 1] == c) return;
+    path[len] = c;
+    path[len + 1] = '\0';
 }
 
 //----------------------------------------------------------------------

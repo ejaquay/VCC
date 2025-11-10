@@ -157,6 +157,10 @@ extern "C"
     __declspec(dllexport) unsigned char PakReadMemoryByte(unsigned short adr)
     {
         adr &= 0x3FFF;
+        // Writing to the CoCoSDC flash bank requires a sequence of reads of
+        // specific addresses to advance the write state. SDC simulates the
+        // flash device that SDC_ROM thinks it is updating. When enabled call
+        // the write bank routine instead of returning ROM data.
         if (EnableBankWrite) {
             return WriteFlashBank(adr);
         } else {
