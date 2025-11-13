@@ -273,6 +273,7 @@ void GetDirectoryLeaf();
 void CommandDone();
 unsigned char GetReplyByte(unsigned char);
 void FloppyCommand(unsigned char);
+void FloppyControl(unsigned char);
 void FloppyRestore(unsigned char);
 void FloppySeek(unsigned char);
 void FloppyReadDisk();
@@ -280,6 +281,7 @@ void FloppyWriteDisk();
 void FloppyTrack(unsigned char);
 void FloppySector(unsigned char);
 void FloppyWriteData(unsigned char);
+unsigned int FloppyLSN();
 unsigned char FloppyStatus();
 unsigned char FloppyReadData();
 void set_filerecord_file_size(FileRecord& , uint32_t);
@@ -343,6 +345,7 @@ static unsigned int stream_lsn;
 
 // Floppy I/O
 static char FlopDrive = 0;
+static char FlopSide = 0;
 static char FlopTrack = 0;
 static char FlopSector = 0;
 static char FlopStatus = 0;
@@ -504,6 +507,7 @@ void ParseStartup()
 void CommandDone()
 {
     DLOG_C("*");
+    FlopStatus = FLP_NORMAL;
     AssertInt(gHostKey, INT_NMI, IS_NMI);
 }
 
@@ -558,12 +562,7 @@ void SDCWrite(unsigned char data,unsigned char port)
             if (data == 0x43) {
                 IF.sdclatch = true;
             } else {
-                int tmp = data & 0x47;
-                if (tmp == 1) {
-                    FlopDrive = 0;
-                } else if (tmp == 2) {
-                    FlopDrive = 1;
-                }
+                FloppyControl(data);
             }
             break;
          // Flash Data
@@ -708,10 +707,42 @@ void FloppySeek(unsigned char data)
     DLOG_C("FloppySeek\n");
 }
 
+// Decode floppy control registor
+//   0x01  Drive 0
+//   0x02  Drive 1
+//   0x04  Drive 2
+//   0x08  Motor
+//   0x10  Write precomp
+//   0x20  Density
+//   0x40  Side Select / Drive 3
+//   0x80  Halt flag
+void FloppyControl(unsigned char data)
+{
+    if (data & 0x01) {
+        FlopDrive = 0;
+    } else if (data & 0x02) {
+        FlopDrive = 1;
+    }
+    if (data & 0x40) {
+        FlopSide = 1;
+    } else {
+        FlopSide = 0;
+    }
+}
+
+// Calculate Floppy Logical Sector Number
+unsigned int FloppyLSN()
+{
+    if (Disk[FlopDrive].doublesided)
+        return (FlopTrack * 2 + FlopSide) * 18 + FlopSector - 1;
+    else
+        return FlopTrack * 18 + FlopSector - 1;
+}
+
 // floppy read sector
 void FloppyReadDisk()
 {
-    int lsn = FlopTrack * 18 + FlopSector - 1;
+    int lsn = FloppyLSN();
     snprintf(SDC_Status,16,"SDC:%d Rd %d,%d",CurrentBank,FlopDrive,lsn);
     if (SeekSector(FlopDrive,lsn)) {
         if (ReadFile(Disk[FlopDrive].hFile,FlopRdBuf,256,&FlopRdCnt,nullptr)) {
@@ -730,8 +761,8 @@ void FloppyReadDisk()
 // floppy write sector
 void FloppyWriteDisk()
 {
-    // write not implemented
-    int lsn = FlopTrack * 18 + FlopSector - 1;
+    // write not implemented FIXME
+    int lsn = FloppyLSN();
     DLOG_C("FloppyWriteDisk %d %d not implmented\n",FlopDrive,lsn);
     FlopStatus = FLP_READONLY;
 }
