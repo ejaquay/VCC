@@ -60,7 +60,7 @@ extern PakAppendCartridgeMenuHostCallback CartMenuCallback;
 extern int idle_ctr;
 
 // Cart ROM
-extern char PakRom[0x4000];
+extern unsigned char PakRom[0x4000];
 
 // Host paths for SDC
 extern char IniFile[MAX_PATH];  // Vcc ini file name
