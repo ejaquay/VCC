@@ -151,8 +151,8 @@ namespace VCC
     // delayed flip flop
     struct DFF 
     {
-        uint8_t D{}; // d input
-        uint8_t Q{}; // q output
+        uint8_t D{}; // most recent Clock input
+        uint8_t Q{}; // previous Clock input
 
         void Reset()
         {
