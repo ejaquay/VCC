@@ -154,6 +154,9 @@ unsigned char pia0_read(unsigned char port)
 			{
 				rega[1]=(rega[1] & 63);
 				CPUDeAssertInterupt(IS_PIA0_HSYNC, INT_IRQ);
+				// FIXME VCC interrupts still basically broken,
+				// following VSYNC kludge fixes some things
+				CPUDeAssertInterupt(IS_PIA0_VSYNC, INT_IRQ);
 				return (vccKeyboardGetScan(rega[2]|~rega_dd[2])); //Read
 			}
 			else
