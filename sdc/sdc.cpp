@@ -195,7 +195,6 @@ static unsigned char gStartupBank = 0;
 static unsigned char gLoadedBank = 0xff;  // Currently loaded bank
 static unsigned char gRomDirty = 0;       // RomDirty flag
 
-
 // Streaming control
 static int streaming;
 static unsigned char stream_cmdcode;
@@ -225,6 +224,9 @@ bool get_menu_item(menu_item_entry* item, size_t index);
 // Access the settings object
 static VCC::Util::settings* gpSettings = nullptr;
 VCC::Util::settings& Setting() {return *gpSettings;}
+
+// Bad SDC Card root directory flag
+static bool BadSDRoot {false};
 
 //======================================================================
 //  Functions
@@ -310,7 +312,6 @@ extern "C"
         gSlotId = SlotId;
         AssertIntCallback = callbacks->assert_interrupt;
         gpSettings = new VCC::Util::settings(configuration_path);
-        LoadConfig();
     }
 
     __declspec(dllexport) const char* PakGetName()
@@ -473,9 +474,8 @@ SDC_Configure(HWND hDlg, UINT message, WPARAM wParam, LPARAM /*lParam*/)
         return TRUE;
         break;
     case WM_INITDIALOG:
-        hConfigureDlg=hDlg;  // needed for LoadConfig() and Init..()
+        hConfigureDlg=hDlg;
         CenterDialog(hDlg);
-        LoadConfig();
         InitFlashBoxes();
         InitCardBox();
         SendDlgItemMessage(hDlg,IDC_CLOCK,BM_SETCHECK,ClockEnable,0);
@@ -559,10 +559,14 @@ void LoadConfig()
 
     util::FixDirSlashes(gSDRoot);
     if (!util::IsDirectory(gSDRoot)) {
-        MessageBox (gVccWindow,
+        // LoadConfig getting called twice (why?), only warn once
+        if (!BadSDRoot) {
+            MessageBox (gVccWindow,
                 "Invalid SD Card root\n"
                 "Set SDCard Path using SDC Config"
                 ,"Error",0);
+           BadSDRoot = true;
+        }
     }
 
     for (int i=0;i<8;i++) {
@@ -581,21 +585,12 @@ void LoadConfig()
 //------------------------------------------------------------
 bool SaveConfig(HWND hDlg)
 {
-
-    if (!util::IsDirectory(gSDRoot)) {
-        MessageBox(gVccWindow,"Invalid SDCard Path\n","Error",0);
-        return false;
-    }
-
-    //Save SD Card Path
     char tmp[MAX_PATH];
-    hSDCardBox = GetDlgItem(hConfigureDlg,ID_SD_BOX);
     GetDlgItemText(hConfigureDlg, ID_SD_BOX, tmp, sizeof(tmp));
-    if (util::IsDirectory(tmp)) {
-        gSDRoot = tmp;
-    } else {
-        MessageBox (gVccWindow,"Bad SD Card Path. Not changed","Warning",0);
-    }
+    gSDRoot = tmp;
+    util::FixDirSlashes(gSDRoot);
+    if (!util::IsDirectory(gSDRoot))
+        MessageBox (gVccWindow,"Bad SD Card Path","Warning",0);
 
     Setting().write("SDC","SDCardPath",gSDRoot);
     Setting().write("DefaultPaths","RomPath",gRomPath);
