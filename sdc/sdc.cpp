@@ -575,7 +575,7 @@ void LoadConfig()
         std::string name = VCC::Util::StripModPath(fullname);
         VCC::Util::copy_to_char(name,FlashFile[i],MAX_PATH);
     }
-    
+
     ClockEnable = Setting().read("SDC","ClockEnable",1);
     gStartupBank = Setting().read("SDC","StartupBank",0);
 }
@@ -585,14 +585,6 @@ void LoadConfig()
 //------------------------------------------------------------
 bool SaveConfig(HWND hDlg)
 {
-    char tmp[MAX_PATH];
-    GetDlgItemText(hConfigureDlg, ID_SD_BOX, tmp, sizeof(tmp));
-    gSDRoot = tmp;
-    util::FixDirSlashes(gSDRoot);
-    if (!util::IsDirectory(gSDRoot))
-        MessageBox (gVccWindow,"Bad SD Card Path","Warning",0);
-
-    Setting().write("SDC","SDCardPath",gSDRoot);
     Setting().write("DefaultPaths","RomPath",gRomPath);
 
     for (int i=0;i<8;i++) {
@@ -608,6 +600,23 @@ bool SaveConfig(HWND hDlg)
 
     gStartupBank &= 7;
     Setting().write("SDC","StartupBank",std::to_string(gStartupBank));
+
+    // SDroot
+    char path[MAX_PATH];
+    GetDlgItemText(hConfigureDlg, ID_SD_BOX, path, sizeof(path));
+    std::string tmp = path;
+
+    util::FixDirSlashes(tmp);
+    if (!util::IsDirectory(tmp))
+        MessageBox (gVccWindow,"Bad SD Card Path","Warning",0);
+
+    else if (tmp != gSDRoot) {
+        gSDRoot = tmp;
+        Setting().write("SDC","SDCardPath",gSDRoot);
+        UnloadDisk(0);
+        UnloadDisk(1);
+        SendMessage(gVccWindow,WM_VCC_CPU_RESET,(WPARAM) 0,(LPARAM) 0);
+    }
     return true;
 }
 
@@ -692,44 +701,30 @@ void UpdateFlashItem(int index)
 }
 
 //------------------------------------------------------------
-// Dialog to select SD card path in user home directory
+// Dialog to select SD card path
 //------------------------------------------------------------
-
-// TODO: Replace Win32 browse dialog with the modern IFileDialog API (Vista+)
 void SelectCardBox()
 {
-    namespace fs = std::filesystem;
+    FileDialog dlg;
+    bool result;
 
-    // Prepare browse dialog
-    BROWSEINFO bi = {};
-    bi.hwndOwner = GetActiveWindow();
-    bi.lpszTitle = "Set the SD card path";
-    bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NONEWFOLDERBUTTON;
-
-    // Set initial folder to user profile
-    LPITEMIDLIST pidlRoot = nullptr;
-    if (SUCCEEDED(SHGetSpecialFolderLocation(nullptr, CSIDL_PROFILE, &pidlRoot)))
-        bi.pidlRoot = pidlRoot;
-
-    // Show dialog
-    LPITEMIDLIST pidl = SHBrowseForFolder(&bi);
-
-    // Free root PIDL if allocated
-    if (pidlRoot)
-        CoTaskMemFree(pidlRoot);
-
-    if (pidl)
-    {
-        char tmp[MAX_PATH] = {};
-        if (SHGetPathFromIDList(pidl, tmp))
-        {
-            gSDRoot = tmp;
-            util::FixDirSlashes(gSDRoot);
-            SendMessage(hSDCardBox, WM_SETTEXT, 0, (LPARAM)gSDRoot.c_str());
-        }
-
-        CoTaskMemFree(pidl);
+#ifdef _LEGACY_VCC
+    dlg.setTitle("Set SD card directory by selecting a file");
+    result = dlg.show(0,hConfigureDlg);
+    if (result) {
+        std::string file = dlg.getpath();
+        std::string dir = util::GetDirectoryPart(file);
+        SendMessage(hSDCardBox, WM_SETTEXT, 0, (LPARAM)dir.c_str());
     }
+#else
+    dlg.setTitle("Select SD card directory");
+    result = dlg.show_folder(hConfigureDlg);
+    if (result) {
+        std::string dir = dlg.getpath();
+        SendMessage(hSDCardBox, WM_SETTEXT, 0, (LPARAM)dir.c_str());
+    }
+#endif
+
 }
 
 //=====================================================================

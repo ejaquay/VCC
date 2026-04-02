@@ -296,10 +296,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	switch (message)
 	{
-		// Hard reset VC
+		// Hard reset VCC
 		case WM_VCC_CPU_RESET:
 			if (EmuState.EmulationRunning)
 				EmuState.ResetPending=2;
+			break;
+
+		// Soft reset VCC
+		case WM_VCC_SOFT_RESET:
+			if (EmuState.EmulationRunning)
+				EmuState.ResetPending=1;
 			break;
 
 		// Rebuild dynamic menus
