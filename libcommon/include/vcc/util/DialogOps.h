@@ -57,6 +57,7 @@ public:
 
     void setDefExt(const char* DefExt);
     void setInitialDir(const char* InitialDir);
+    void setInitialDir(const std::string& InitialDir);
     void setFilter(const char* Filter);
     void setFlags(unsigned int Flags);
     void setTitle(const char* Title);

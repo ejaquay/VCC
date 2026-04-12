@@ -61,6 +61,11 @@ void FileDialog::setInitialDir(const char* InitialDir)
     sInitDir_.assign(InitialDir ? InitialDir : "");
 }
 
+void FileDialog::setInitialDir(const std::string& InitialDir)
+{
+    sInitDir_ = InitialDir;
+}
+
 void FileDialog::setFilter(const char* Filter)
 {
     sFilter_.clear();
@@ -223,6 +228,7 @@ bool FileDialog::show_folder(HWND Owner)
     if (!sInitDir_.empty()) {
         IShellItem* folder = nullptr;
         std::wstring w = UTF8ToWide(sInitDir_);
+        RevDirSlashes(w);
         if (SUCCEEDED(SHCreateItemFromParsingName(w.c_str(), nullptr,
                                           IID_PPV_ARGS(&folder)))) {
             dlg->SetFolder(folder);
