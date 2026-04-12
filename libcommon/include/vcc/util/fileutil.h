@@ -23,6 +23,7 @@
 
 #include <string>
 #include <filesystem>
+#include <algorithm>
 #include <Windows.h>
 
 //=========================================================================
@@ -116,6 +117,16 @@ namespace VCC::Util {
 		if (!dir || !*dir) return;
 			for (char* p = dir; *p; ++p)
 				if (*p == '/') *p = '\\';
+	}
+
+	// Overrides for std::string and wstring
+	inline void RevDirSlashes(std::string& dir)
+	{
+		std::replace(dir.begin(), dir.end(), '/', '\\');
+	}
+	inline void RevDirSlashes(std::wstring& dir)
+	{
+		std::replace(dir.begin(), dir.end(), L'/', L'\\');
 	}
 
 	// Return copy of path with backslashes converterd

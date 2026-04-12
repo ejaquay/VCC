@@ -707,6 +707,7 @@ void SelectCardBox()
 {
     FileDialog dlg;
     bool result;
+	dlg.setInitialDir(util::GetDirectoryPart(gSDRoot));
 
 #ifdef _LEGACY_VCC
     dlg.setTitle("Set SD card directory by selecting a file");
