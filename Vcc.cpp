@@ -391,7 +391,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 				case ID_FILE_RUN:
 					EmuState.EmulationRunning=TRUE;
-					InvalidateBoarder();
+					gGimeGpu.InvalidateBoarder();
 					break;
 
 				case ID_FILE_RESET_SFT:
@@ -423,7 +423,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					break;
 
 				case ID_FLIP_ARTIFACTS:
-					FlipArtifacts();
+					gGimeGpu.FlipArtifacts();
 					break;
 
 				case ID_SWAP_JOYSTICKS:
@@ -575,9 +575,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 				case DIK_F6:
 					if (IsShiftKeyDown())
-						FlipArtifacts();
+						gGimeGpu.FlipArtifacts();
 					else
-						SetMonitorType(!SetMonitorType(QUERY));
+						gGimeGpu.SetMonitorType(!gGimeGpu.SetMonitorType(QUERY));
 				break;
 
 				case DIK_F7:
@@ -625,7 +625,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					if (FlagEmuStop == TH_RUNNING) {
 						if (IsShiftKeyDown()) {
 							SetInfoBand(!SetInfoBand(QUERY));
-							InvalidateBoarder();
+							gGimeGpu.InvalidateBoarder();
 						} else {
 							FlagEmuStop = TH_REQWAIT;
 							EmuState.FullScreen =!EmuState.FullScreen;
@@ -861,7 +861,8 @@ void DoHardReset(SystemState* const HRState)
 	mc6883_reset();	//Captures interal rom pointer for CPU Interupt Vectors
 	CPUInit();
 	CPUReset();		// Zero all CPU Registers and sets the PC to VRESET
-	GimeReset();
+	gGimeGpu.GimeReset();
+	MiscReset();
 	UpdateBusPointer();
 	EmuState.TurboSpeedFlag=1;
 	ResetBus();
@@ -875,7 +876,8 @@ void SoftReset()
 	mc6883_reset();
 	PiaReset();
 	CPUReset();
-	GimeReset();
+	gGimeGpu.GimeReset();
+	MiscReset();
 	MmuReset();
 	LoadRom();
 	ResetBus();
@@ -1061,6 +1063,7 @@ unsigned __stdcall EmuLoop(HANDLE hEvent)
 		}
 
 		StartRender();
+
 		for (uint8_t Frames = 1; Frames <= EmuState.FrameSkip; Frames++)
 		{
 			FrameCounter++;
@@ -1141,7 +1144,7 @@ void FullScreenToggle()
 		MessageBox(nullptr,"Can't rebuild primary Window","Error",0);
 		exit(0);
 	}
-	InvalidateBoarder();
+	gGimeGpu.InvalidateBoarder();
 
 	EmuState.ConfigDialog=nullptr;
 	PauseAudio(false);
