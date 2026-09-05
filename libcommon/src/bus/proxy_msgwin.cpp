@@ -41,8 +41,11 @@ namespace VCC::Core
 			case WM_VCC_CPU_RESET:
 			case WM_VCC_UPD_MENU:
 			case WM_VCC_SOFT_RESET:
+			case WM_VCC_SET_START_SLOT:
+			case WM_VCC_LOAD_SLOT:
+			case WM_VCC_UNLOAD_SLOT:
 				DLOG_C("DLL msg %d\n", uMsg);
-			return SendMessageA(h_target_, uMsg, wParam, lParam);
+				return SendMessageA(h_target_, uMsg, wParam, lParam);
 		}
 		return TRUE;
 	}

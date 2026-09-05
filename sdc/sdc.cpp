@@ -615,7 +615,7 @@ bool SaveConfig(HWND hDlg)
         Setting().write("SDC","SDCardPath",gSDRoot);
         UnloadDisk(0);
         UnloadDisk(1);
-        SendMessage(gVccWindow,WM_VCC_CPU_RESET,(WPARAM) 0,(LPARAM) 0);
+        SendHardReset(gVccWindow);
     }
     return true;
 }

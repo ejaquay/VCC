@@ -102,16 +102,26 @@ void configuration_dialog::select_new_cartridge(unsigned int item)
 	dlg.setFlags(OFN_FILEMUSTEXIST);
 	if (dlg.show(0, dialog_handle_))
 	{
-		mpi_.eject_cartridge(slot);
+	
+		mpi_.eject_cartridge(slot); // Should not be needed
 
 		if (mpi_.mount_cartridge(slot, dlg.path()) == cartridge_loader_status::success)
 		{
 			configuration_.slot_cartridge_path(slot, dlg.path());
+		    // Update default module directory setting
 			if (cart_type == 1) {
 				configuration_.last_accessed_dll_path(dlg.getdir());
 			} else {
 				configuration_.last_accessed_rom_path(dlg.getdir());
 			}
+
+			// This will cause crash if slot is active
+			DLOG_C("MPI sending slot %d new load %s\n",slot+1,dlg.path());
+			PluginMsgData slotData{};
+			slotData.size = sizeof(PluginMsgData);
+			strcpy_s(slotData.pluginPath, MAX_PATH, dlg.path());
+			SendLoadSlot(gVccWnd, slot+1, slotData); // Slot is 1-4
+
 		}
 
 	}
@@ -213,6 +223,10 @@ void configuration_dialog::eject_or_select_new_cartridge(unsigned int Button)
 
 	if (!mpi_.empty(slot))
 	{
+
+//PrintLogC("MPI sending slot unload\n");
+//		SendUnloadSlot(gVccWnd, slot+1); // Slot is 1-4
+
 		mpi_.eject_cartridge(slot);
 		configuration_.slot_cartridge_path(slot, {});
 		update_slot_details(slot);
@@ -294,7 +308,7 @@ INT_PTR configuration_dialog::process_message(
 			select_new_cartridge(button);
 			return TRUE;
 		case IDC_RESET:
-			SendMessage(gVccWnd,WM_VCC_CPU_RESET,(WPARAM) 0,(LPARAM) 0);
+			SendHardReset(gVccWnd);
 			close();
 			return TRUE;
 		case IDOK:

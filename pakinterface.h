@@ -19,6 +19,7 @@
 
 #pragma once
 #include <vcc/bus/cartridge_loader.h>
+#include <vcc/bus/cartridge_messages.h>
 
 void PakTimer();
 unsigned char PakReadPort (unsigned char);
@@ -35,4 +36,8 @@ void UnloadDll();
 void UnloadPack();
 void BuildCartMenu();
 void CartMenuActivated(unsigned int);
+bool SetStartupSlot(unsigned int);
+bool UnloadSlot(unsigned int);
+bool LoadSlot(unsigned int, const PluginMsgData *);
+bool SendSlot(unsigned int, PluginMsgData *);
 

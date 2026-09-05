@@ -24,6 +24,9 @@
 #include <fstream>
 #include <iterator>
 
+//TODO remove this after paralell testing is complete
+bool gIgnoreNextDuplicateCheck = false;
+
 namespace VCC::Core
 {
 
@@ -131,8 +134,9 @@ namespace VCC::Core
 		const cpak_callbacks& cpak_callbacks)
 	{
 
-		if (GetModuleHandle(filename.c_str()) != nullptr)
-		{
+		// TODO remove ignore after parallel testing is complete
+		auto h = GetModuleHandle(filename.c_str());
+		if (h != nullptr && ! gIgnoreNextDuplicateCheck) {
 			return { nullptr, nullptr, cartridge_loader_status::already_loaded };
 		}
 
@@ -143,6 +147,7 @@ namespace VCC::Core
 		DLOG_C("cartridge_loader LoadLibrary %s %d\n", filename.c_str(), GetLastError());
 		if (details.handle == nullptr)
 		{
+			gIgnoreNextDuplicateCheck = false;  //TODO remove
 			return { nullptr, nullptr, cartridge_loader_status::cannot_open };
 		}
 
@@ -156,9 +161,11 @@ namespace VCC::Core
 				cpak_callbacks);
 			details.load_result = cartridge_loader_status::success;
 
+			gIgnoreNextDuplicateCheck = false; //TODO remove
 			return details;
 		}
 
+		gIgnoreNextDuplicateCheck = false; //TODO remove
 		return { nullptr, nullptr, cartridge_loader_status::not_expansion };
 	}
 

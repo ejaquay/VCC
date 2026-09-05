@@ -1,4 +1,4 @@
-//#define USE_LOGGING
+#define USE_LOGGING
 //======================================================================
 // This file is part of VCC (Virtual Color Computer).
 // Vcc is Copyright 2015 by Joseph Forgione
@@ -55,6 +55,9 @@ static cartridge_loader_status load_any_cartridge(const char* filename, const ch
 void CartMenuCallBack(const char* name, int menu_id, MenuItemType type);
 void PakAssertInterupt(Interrupt interrupt, InterruptSource source);
 
+// Multi cart unloader and loader manages carts in slot 0-4
+bool UnloadSlot(unsigned int slot);
+static cartridge_loader_status LoadCartridge(int slot, const char *filename);
 
 struct vcc_cartridge_callbacks : public ::VCC::Core::cartridge_callbacks
 {
@@ -234,6 +237,7 @@ void PakLoadCartridgeUI(int type)
 	}
 }
 
+
 cartridge_loader_status PakLoadCartridge(const char* filename)
 {
 	static const std::map<cartridge_loader_status, UINT> string_id_map = {
@@ -283,19 +287,19 @@ static cartridge_loader_status load_any_cartridge(const char *filename, const ch
 	auto loadedCartridge = VCC::Core::load_cartridge(
 		filename,
 		std::move(boot_slot_adapter),
-		SlotId, 
+		SlotId,
 		iniPath,
 		EmuState.hMsgProxy,
 		callbacks);
 
 	if (loadedCartridge.load_result != cartridge_loader_status::success)
 	{
+		DLOG_C("pakinterface load_any_cartridge failed\n");
 		return loadedCartridge.load_result;
 	}
 
-	DLOG_C("pakinterface:load_any_cartridge type: %s cart ptr: %p\n",
-			typeid(*loadedCartridge.cartridge.get()).name(),
-			loadedCartridge.cartridge.get());
+    DLOG_C("pakinterface load bootslot %s ptr:%p, inst:%p\n",
+           filename, loadedCartridge.cartridge.get(), GetModuleHandle(filename));
 
 	// unload active cartridge (UnloadDLL() is poorly named but is called from Vcc.cpp)
 	UnloadDll();
@@ -310,6 +314,11 @@ static cartridge_loader_status load_any_cartridge(const char *filename, const ch
 	// initialize the cartridge and reset the CPU *now*
 	gActiveCartrige->start();
 	EmuState.ResetPending = 2;
+
+	// Mirror slot 0 in multi slot array
+	// TODO remove ignore check after parallel testing completes
+	gIgnoreNextDuplicateCheck = true;
+	LoadCartridge(0, filename);
 
 	return loadedCartridge.load_result;
 }
@@ -327,7 +336,93 @@ void UnloadDll()
 
 	SendMessage(EmuState.WindowHandle,WM_VCC_UPD_MENU,(WPARAM) 0,(LPARAM) 0);
 	gActiveCartrige->start();
+
+	// Unload mirror copy
+	UnloadSlot(0);
 }
+
+// Multi versions of LoadCatridge and UnLoadCartidge here
+// slot 0 through 4.  Slot 0 is the boot slot.
+// Access via: auto& cart = gCartridgeSlots[slotnum]
+#define NumCartSlots 5
+using plugin_ptr = cartridge_loader_result::cartridge_ptr_type;
+static std::array<plugin_ptr, NumCartSlots> gCartSlots{
+    std::make_unique<VCC::Core::null_cartridge>(),
+    std::make_unique<VCC::Core::null_cartridge>(),
+    std::make_unique<VCC::Core::null_cartridge>(),
+    std::make_unique<VCC::Core::null_cartridge>(),
+    std::make_unique<VCC::Core::null_cartridge>()
+};
+
+using plugin_handle = cartridge_loader_result::handle_type;
+static std::array<plugin_handle, NumCartSlots> gCartHandles{};
+
+// Unload cartridge from slot
+void UnloadCartridge(int slot)
+{
+	// code to unload slot here
+	VCC::Util::section_locker lock(gPakMutex); // still needed?
+
+	// gActiveCartrige is one of a ROM, DLL, or NULL cartridge
+	gCartSlots[slot]->stop();
+	gCartSlots[slot] = std::make_unique<VCC::Core::null_cartridge>();
+	gCartHandles[slot].reset();
+	gCartSlots[slot]->start();
+
+	// update menus (later)
+	//SendMessage(EmuState.WindowHandle,WM_VCC_UPD_MENU,(WPARAM) 0,(LPARAM) 0);
+}
+
+// Load cartridge to slot
+static cartridge_loader_status LoadCartridge(int slot, const char *filename)
+{
+    cpak_callbacks callbacks{
+        PakAssertInterupt,
+        PakAssertCartrigeLine,
+        PakWriteMemoryByte,
+        PakReadMemoryByte
+    };
+
+    slot_id_type SlotId = slot;
+    auto adapter = std::make_unique<vcc_cartridge_callbacks>();
+
+	// DLL plugins need ini file path so they can manage settings
+	char iniPath[MAX_PATH]="";
+	GetIniFilePath(iniPath);
+
+	// Load the cartridge
+    auto loadedCartridge = VCC::Core::load_cartridge(
+        filename,
+        std::move(adapter),
+        SlotId,
+        iniPath,
+        EmuState.hMsgProxy,
+        callbacks);
+
+    if (loadedCartridge.load_result != cartridge_loader_status::success) {
+    	DLOG_C("pakinterface LoadCartridge slot %d %s failed\n", slot, filename);
+        return loadedCartridge.load_result;
+    }
+
+    DLOG_C("pakinterface LoadCartridge slot %d %s ptr:%p, inst:%p\n",
+           slot, filename, loadedCartridge.cartridge.get(), GetModuleHandle(filename));
+
+    UnloadCartridge(slot);
+
+    VCC::Util::section_locker lock(gPakMutex);
+
+    gCartSlots[slot]   = std::move(loadedCartridge.cartridge);
+    gCartHandles[slot] = std::move(loadedCartridge.handle);
+
+	// TODO:  Initialize the cartridge (later)
+    //gCartSlots[slot]->start();
+
+	// TODO: update menus or reset if slot active (later)
+	//SendMessage(EmuState.WindowHandle,WM_VCC_UPD_MENU,(WPARAM) 0,(LPARAM) 0);
+
+    return loadedCartridge.load_result;
+}
+
 
 void GetCurrentModule(char *DefaultModule)
 {
@@ -396,3 +491,45 @@ void CartMenuActivated(unsigned int MenuID)
 	unsigned char menu_item = MenuID & 0xFF;
 	gActiveCartrige->menu_item_clicked(menu_item);
 }
+//--------------------------------------------------------------
+// Messages from MPI dll
+// -------------------------------------------------------------
+
+// Set the start up slot
+bool SetStartupSlot(unsigned int slot)
+{
+	DLOG_C("Pakinterface SetStartupSlot: %d\n",slot);
+	return true;
+}
+
+// Unload slot contents
+bool UnloadSlot(unsigned int slot)
+{
+	DLOG_C("Pakinterface UnloadSlot: %d\n",slot);
+	UnloadCartridge(slot);
+	return true;
+}
+
+// Load slot
+bool LoadSlot(unsigned int slot, const PluginMsgData * data)
+{
+	if (data == nullptr) {
+		DLOG_C("Pakinterface LoadSlot null data pointer\n");
+		return false;
+	}
+
+	if (data->size != sizeof(PluginMsgData)) {
+		DLOG_C("Pakinterface LoadSlot bad data size\n");
+		return false;
+	}
+
+	DLOG_C("Pakinterface LoadSlot: %d %s\n",slot,data->pluginPath);
+
+	// TODO remove ignore check after parallel testing completes
+	gIgnoreNextDuplicateCheck = true;
+	LoadCartridge(slot, data->pluginPath);
+	return true;
+}
+
+//Following here to remind me of better way for plugin descriptions.(loading not required)
+//PrintLogC("Comments: %s\n", VCC::Util::GetVersionInfo(data->pluginPath,"Comments"));
