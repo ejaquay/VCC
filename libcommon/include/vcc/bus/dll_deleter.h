@@ -18,6 +18,10 @@
 #pragma once
 #include <vcc/util/logger.h>
 #include <Windows.h>
+
+// TODO remove this after parallel testing is complete
+extern bool gIgnoreNextDuplicateCheck;
+
 // How nuts is this?  Just friggen call FreeLibrary at the point that is decided
 namespace VCC::Core
 {
@@ -31,4 +35,6 @@ namespace VCC::Core
 			}
 		};
 	};
+
 }
+

@@ -175,8 +175,8 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
 	EmuState.Exiting = false;
 
 	// A reset will read settings from the config file.  Must call
-	// InitialLoadConfig and instantiate settings before a reset occurs. 
-	// Normally pakinterface will do a hard reset after loading a 
+	// InitialLoadConfig and instantiate settings before a reset occurs.
+	// Normally pakinterface will do a hard reset after loading a
 	// cart but in case there is no cart to load force a reset here.
 	InitialLoadConfig(&EmuState);
 	EmuState.ResetPending=2;
@@ -192,7 +192,7 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
 
 	InitSound();
 	LoadModule();
-	SetClockSpeed(1);	//Default clock speed .89 MHZ	
+	SetClockSpeed(1);	//Default clock speed .89 MHZ
 	BinaryRunning = true;
 	EmuState.EmulationRunning=AutoStart;
 
@@ -269,7 +269,7 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
 			}
 		}
 	}
-	CloseHandle( hEvent ) ;	
+	CloseHandle( hEvent ) ;
 	CloseHandle( hEMUQuit ) ;
 	CloseHandle( hEMUThread ) ;
 	CloseScreen();
@@ -319,6 +319,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			DrawCartMenu(hWnd);
 			break;
 
+		// Set startup slot from MPI
+		case WM_VCC_SET_START_SLOT: {
+			uint32_t slot = static_cast<uint32_t>(wParam);
+			return SetStartupSlot(slot);
+		}
+
+		// Unload slot from MPI
+		case WM_VCC_UNLOAD_SLOT: {
+			uint32_t slot = static_cast<uint32_t>(wParam);
+			return UnloadSlot(slot);
+		}
+
+		// Load slot from MPI
+		case WM_VCC_LOAD_SLOT: {
+			uint32_t slot = static_cast<uint32_t>(wParam);
+			return LoadSlot(slot,reinterpret_cast<const PluginMsgData*>(lParam));
+		}
+
 		case WM_SYSCOMMAND:
 			// Disable windows seeing Left ALT. (ALT-TAB can not be disabled)
 			if(wParam==SC_KEYMENU) {
@@ -333,7 +351,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			wmEvent = HIWORD(wParam);
 
 			// Parse the menu selections:
-			
+
 			// Check if ID is in cartridge menu range. Control ID's are
 			// biased by SlotNum, there are five slots each gets 50
 			if ( (wmId >= MID_CONTROL) & (wmId < MID_CONTROL + 250) )
@@ -343,7 +361,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 
 			switch (wmId)
-			{	
+			{
 				case IDM_USER_WIKI:
 					winrt::Windows::System::Launcher::LaunchUriAsync(
 						winrt::Windows::Foundation::Uri(
@@ -438,7 +456,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				case ID_MEMORY_DISPLAY:
 					VCC::Debugger::UI::OpenMemoryMapWindow(EmuState.WindowInstance, EmuState.WindowHandle);
 				    break;
-	
+
 				case ID_PROCESSOR_STATE:
 					VCC::Debugger::UI::OpenProcessorStateWindow(EmuState.WindowInstance, EmuState.WindowHandle);
 					break;
@@ -516,7 +534,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             Extended=(lParam >> 24) & 1;
 		    if (Extended && (OEMscan!=DIK_NUMLOCK)) OEMscan += 0x80;
 			vccKeyboardHandleKey(OEMscan,kEventKeyUp);
-			
+
 			return 0;
 			break;
 
@@ -620,7 +638,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					}
 				}
 				break;
-				
+
 				case DIK_F11:
 					if (FlagEmuStop == TH_RUNNING) {
 						if (IsShiftKeyDown()) {
@@ -694,7 +712,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				if (!EmuState.FullScreen)
 				{
 					const DisplayDetails displayDetails(GetDisplayDetails(clientRect.right, clientRect.bottom));
-					
+
 					maxHorizontalPosition -= (displayDetails.leftBorderColumns + displayDetails.rightBorderColumns);
 					maxVerticalPosition -= (displayDetails.topBorderRows + displayDetails.bottomBorderRows);
 
@@ -816,7 +834,7 @@ void SetupClock()
 }
 
 void DoHardReset(SystemState* const HRState)
-{	
+{
 	HRState->RamBuffer=MmuInit(HRState->RamSize);	//Alocate RAM/ROM & copy ROM Images from source
 	HRState->WRamBuffer=(unsigned short *)HRState->RamBuffer;
 
@@ -1031,7 +1049,7 @@ void SaveConfig() {
 unsigned __stdcall EmuLoop(HANDLE hEvent)
 {
 	static float FPS;
-	static unsigned int FrameCounter=0;	
+	static unsigned int FrameCounter=0;
 	CalibrateThrottle();
 	Sleep(30);
 	SetEvent(hEvent) ;
@@ -1104,7 +1122,7 @@ unsigned __stdcall EmuLoop(HANDLE hEvent)
 		EndRender(EmuState.FrameSkip);
 		FPS/=EmuState.FrameSkip;
 		GetModuleStatus(&EmuState);
-		
+
 		char tstatus[128];
 		char tspeed[32];
 		snprintf(tspeed,sizeof(tspeed),"%2.2fMhz",EmuState.CPUCurrentSpeed);

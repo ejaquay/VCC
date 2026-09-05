@@ -1,4 +1,4 @@
-//#define USE_LOGGING
+#define USE_LOGGING
 ////////////////////////////////////////////////////////////////////////////////
 //	Copyright 2015 by Joseph Forgione
 //	This file is part of VCC (Virtual Color Computer).
@@ -63,7 +63,7 @@ multipak_cartridge::catalog_id_type multipak_cartridge::catalog_id() const
 	return ::VCC::Util::load_string(gModuleInstance, IDS_CATNUMBER);
 }
 
-multipak_cartridge::description_type multipak_cartridge:: description() const
+multipak_cartridge::description_type multipak_cartridge::description() const
 {
 	return ::VCC::Util::load_string(gModuleInstance, IDS_CATNUMBER);
 }
@@ -84,9 +84,16 @@ void multipak_cartridge::start()
 		if (!path.empty())
 		{
 			if (mount_cartridge(mpi_slot, path) != VCC::Core::cartridge_loader_status::success) {
-				DLOG_C("Clearing configured slot path %d\n",mpi_slot);
+				DLOG_C("MPI Clearing configured slot path %d\n",mpi_slot);
 				configuration_.slot_cartridge_path(mpi_slot,"");
 			}
+			// Send mount to pakinterface
+			// Send load slot message to WndProc
+			DLOG_C("MPI sending initial slot %d load %s\n",mpi_slot+1,path.c_str());
+			PluginMsgData slotData{};
+			slotData.size = sizeof(PluginMsgData);
+			strcpy_s(slotData.pluginPath, MAX_PATH, path.c_str());
+			SendLoadSlot(gVccWnd, mpi_slot+1, slotData); // Slot is 1-4
 		}
 	}
 }
@@ -324,8 +331,13 @@ void multipak_cartridge::eject_cartridge(slot_id_type mpi_slot)
 	VCC::Util::section_locker lock(mutex_);
 	slots_[mpi_slot].stop();
 	slots_[mpi_slot] = {};
+
 	if (mpi_slot == cached_cts_slot_ || mpi_slot == switch_slot_)
-		SendMessage(gVccWnd,WM_VCC_CPU_RESET,(WPARAM) 0,(LPARAM) 0);
+		SendHardReset(gVccWnd);
+
+	DLOG_C("MPI sending slot %d unload\n",mpi_slot+1);
+	SendUnloadSlot(gVccWnd, mpi_slot+1); // Slot is 1-4
+
 	SendMessage(gVccWnd,WM_VCC_UPD_MENU,(WPARAM) 0,(LPARAM) 0);
 }
 
@@ -353,9 +365,8 @@ multipak_cartridge::mount_status_type multipak_cartridge::mount_cartridge(
 		gHostCallbacks->read_memory_byte_//,
 	};
 	
-	DLOG_C("%3d %p %p %p %p %p\n",mpi_slot,cpak_callbacks);
-
 	std::size_t SlotId = mpi_slot + 1;
+	DLOG_C("MPI slot %3d callbacks %p %p %p %p %p\n",SlotId,cpak_callbacks);
 
 	// ctx is passed to the loader but not to cartridge DLL's
 	auto* parent = this;
@@ -364,8 +375,7 @@ multipak_cartridge::mount_status_type multipak_cartridge::mount_cartridge(
 		*callbacks_,
 		*parent );
 
-	DLOG_C("load cart %d  %s\n",mpi_slot,filename);
-
+	DLOG_C("MPI load cart %d  %s\n",SlotId,filename);
 	auto loadedCartridge = VCC::Core::load_cartridge(
 		filename,
 		std::move(slot_adapter),
@@ -402,6 +412,8 @@ multipak_cartridge::mount_status_type multipak_cartridge::mount_cartridge(
 	slots_[mpi_slot].start();
 	slots_[mpi_slot].reset();
 
+	DLOG_C("MPI multipak slot loaded %d %s\n",mpi_slot+1,filename);
+	
 	SendMessage(gVccWnd,WM_VCC_UPD_MENU,(WPARAM) 0,(LPARAM) 0);
 	return loadedCartridge.load_result;
 }
