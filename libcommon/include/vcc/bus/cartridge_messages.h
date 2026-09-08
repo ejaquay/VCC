@@ -11,50 +11,44 @@ struct PluginMsgData {
 	char pluginPath[MAX_PATH];  // Plugin filename
 };
 
-// Hard Reset
+// Hard Reset (any plugin)
 inline constexpr uint32_t WM_VCC_CPU_RESET = WM_APP + 101;
-
 inline LRESULT SendHardReset(HWND hwnd) {
 	return SendMessage(hwnd,WM_VCC_CPU_RESET, 0, 0);
 }
 
-// Update menu request
+// Update menu request (any plugin)
 inline constexpr uint32_t WM_VCC_UPD_MENU = WM_APP + 102;
-
 inline LRESULT SendMenuUpdate(HWND hwnd) {
 	return SendMessage(hwnd,WM_VCC_UPD_MENU, 0, 0);
 }
 
-// Soft RESET
+// Soft RESET (any plugin)
 inline constexpr uint32_t WM_VCC_SOFT_RESET = WM_APP + 103;
-
 inline LRESULT SendSoftReset(HWND hwnd) {
 	return SendMessage(hwnd,WM_VCC_SOFT_RESET, 0, 0);
 }
 
-// Set startup slot
+// Set startup slot (from MMI)
 inline constexpr uint32_t WM_VCC_SET_START_SLOT = WM_APP + 104;
-
 inline LRESULT SendStartSlot(HWND hwnd, uint32_t slotnum) {
-	return SendMessage(hwnd,WM_VCC_SOFT_RESET, slotnum, 0);
+	return SendMessage(hwnd,WM_VCC_SET_START_SLOT, slotnum, 0);
 }
 
-// Unload slot
+// Unload slot (from MMI)
 inline constexpr uint32_t WM_VCC_UNLOAD_SLOT = WM_APP + 105;
-
 inline LRESULT SendUnloadSlot(HWND hwnd, uint32_t slotnum) {
 	return SendMessage(hwnd,WM_VCC_UNLOAD_SLOT, slotnum, 0);
 }
 
-// Load cartridge plugin
+// Load cartridge plugin (from MMI)
 inline constexpr uint32_t WM_VCC_LOAD_SLOT =  WM_APP + 106;
-
 inline LRESULT SendLoadSlot(HWND hwnd, uint32_t slotnum, const PluginMsgData& pluginData) {
-    return SendMessage(
-        hwnd,
-        WM_VCC_LOAD_SLOT,
-        static_cast<WPARAM>(slotnum),
-        reinterpret_cast<LPARAM>(&pluginData)
-    );
+	return SendMessage(
+	hwnd,
+	WM_VCC_LOAD_SLOT,
+	static_cast<WPARAM>(slotnum),
+	reinterpret_cast<LPARAM>(&pluginData)
+	);
 }
 

@@ -100,9 +100,9 @@ void configuration_dialog::select_new_cartridge(unsigned int item)
 			"\0");
 	}
 	dlg.setFlags(OFN_FILEMUSTEXIST);
+
 	if (dlg.show(0, dialog_handle_))
 	{
-	
 		mpi_.eject_cartridge(slot); // Should not be needed
 
 		if (mpi_.mount_cartridge(slot, dlg.path()) == cartridge_loader_status::success)
@@ -151,6 +151,9 @@ void configuration_dialog::set_selected_slot(size_t slot)
 	// FIXME: Maybe move this to the callsite or when the dialog closes or at least make it optional?
 	mpi_.switch_to_slot(slot);
 	configuration_.selected_slot(slot);
+
+//	// Send startup slot to WndProc (0-3 maps to mpi slots 1-4)
+//	SendStartSlot(gVccWnd, slot);
 }
 
 
@@ -309,6 +312,7 @@ INT_PTR configuration_dialog::process_message(
 			return TRUE;
 		case IDC_RESET:
 			SendHardReset(gVccWnd);
+//SendStartSlot(gVccWnd, slot);
 			close();
 			return TRUE;
 		case IDOK:

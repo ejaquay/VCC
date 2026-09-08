@@ -28,21 +28,16 @@
 #include <vcc/bus/cartridge_menu.h>
 #include <vcc/bus/cartridge_menuitem.h>
 #include <vcc/bus/cartridge_messages.h>
-namespace
-{
 
 // SlotId is an unsigned int 0-4 used to indicate to a cartridge which slot
 // it is in.  SlotId 0 is the boot slot, SlotId's 1-4 are multipak slots
 // mpi_slot indexes used elsewhere in this source differ, they represent only
 // multipak mpi_slots and are numbered 0-3,  (SlotId = mpi_slot+1)
 
+namespace
+{
 	// Is a port a disk port?
-	constexpr std::pair<size_t, size_t> disk_controller_io_port_range = { 0x40, 0x5f };
-	constexpr bool is_disk_controller_port(multipak_cartridge::slot_id_type port)
-	{
-		return port >= disk_controller_io_port_range.first && port <= disk_controller_io_port_range.second;
-	}
-
+	inline bool is_disk_port(int port) { return (port >= 0x40 && port <= 0x5f); }
 }
 
 multipak_cartridge::multipak_cartridge(
@@ -75,6 +70,9 @@ void multipak_cartridge::start()
 	switch_slot_ = configuration_.selected_slot();
 	cached_cts_slot_ = switch_slot_;
 	cached_scs_slot_ = switch_slot_;
+
+	// Send startup slot to WndProc
+	SendStartSlot(gVccWnd, switch_slot_);
 
 	// Mount them
 	for (auto mpi_slot(0u); mpi_slot < slots_.size(); mpi_slot++)
@@ -154,7 +152,7 @@ void multipak_cartridge::write_port(unsigned char port_id, unsigned char value)
 	}
 
 	// Only write disk ports (0x40-0x5F) if SCS is set
-	if (is_disk_controller_port(port_id))
+	if (is_disk_port(port_id))
 	{
 		slots_[cached_scs_slot_].write_port(port_id, value);
 		return;
@@ -170,7 +168,7 @@ unsigned char multipak_cartridge::read_port(unsigned char port_id)
 {
 	VCC::Util::section_locker lock(mutex_);
 
-	// slot_select_port_id will ALLWAYS be 0x7f chet
+	// slot_select_port_id is 0x7f
 	if (port_id == slot_select_port_id)	// Self
 	{
 		slot_register_ &= 0b11001100;
@@ -180,7 +178,7 @@ unsigned char multipak_cartridge::read_port(unsigned char port_id)
 	}
 
 	// Only read disk ports (0x40-0x5F) if SCS is set
-	if (is_disk_controller_port(port_id))
+	if (is_disk_port(port_id))
 	{
 		return slots_[cached_scs_slot_].read_port(port_id);
 	}
@@ -333,6 +331,7 @@ void multipak_cartridge::eject_cartridge(slot_id_type mpi_slot)
 	slots_[mpi_slot] = {};
 
 	if (mpi_slot == cached_cts_slot_ || mpi_slot == switch_slot_)
+		SendStartSlot(gVccWnd, 0);
 		SendHardReset(gVccWnd);
 
 	DLOG_C("MPI sending slot %d unload\n",mpi_slot+1);
@@ -362,7 +361,7 @@ multipak_cartridge::mount_status_type multipak_cartridge::mount_cartridge(
 		gHostCallbacks->assert_interrupt_,
 		assert_cartridge_line_thunk,
 		gHostCallbacks->write_memory_byte_,
-		gHostCallbacks->read_memory_byte_//,
+		gHostCallbacks->read_memory_byte_
 	};
 	
 	std::size_t SlotId = mpi_slot + 1;
