@@ -348,6 +348,7 @@ void UnloadCartridge(int slot)
 void UnloadDll()
 {
 	UnloadCartridge(0);
+	gPakRouter.set_startup_slot(0);
 }
 
 //--------------------------------------------------------
@@ -387,20 +388,22 @@ static cartridge_loader_status LoadCartridge(int slot, const char *filename)
 		   slot, filename, loadedCartridge.cartridge.get(), GetModuleHandle(filename));
 
 	UnloadCartridge(slot);
+	if (slot == 0) gPakRouter.set_startup_slot(0);
+
 	VCC::Util::section_locker lock(gPakMutex);
 	strcpy(DllPath, filename);
 	gCartSlots[slot]   = std::move(loadedCartridge.cartridge);
 	gCartHandles[slot] = std::move(loadedCartridge.handle);
 
 	if (slot == 0) {
-		// initialize the cartridge and reset the CPU *now*
-		gPakRouter.reset();
+		// Initialize the cartridge, if it is MPI it will update the startup slot
 		gCartSlots[0]->start();
+		gPakRouter.reset();
 		EmuState.ResetPending = 2;
 		SendMessage(EmuState.WindowHandle,WM_VCC_UPD_MENU,(WPARAM) 0,(LPARAM) 0);
 	} else {
 		// TODO:  Initialize the cartridge. Does this cause a reload? (later)
-		//gCartSlots[slot]->start();
+		gCartSlots[slot]->start();
 	}
 
 	// Update router slot list.

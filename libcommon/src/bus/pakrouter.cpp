@@ -29,17 +29,17 @@
 
 namespace VCC::Core
 {
-	PakRouter::PakRouter() { 
+	PakRouter::PakRouter()
+	{ 
 		startup_slot_ = 0;
 		scs_slot_ = 0;
 		cts_slot_ = 0;
 		slots_.fill(nullptr);
 	}
 
-	// Set the startup slot 0..4.  Message from MPI plugin.  Plugin is responsible
-	// for correctness, if the startup slot is empty, the plughin should set the
-	// startup slot to zero.
-	void PakRouter::set_startup_slot(unsigned startup_slot) {
+	// Set the startup slot 0..4
+	void PakRouter::set_startup_slot(unsigned startup_slot)
+	{
 		startup_slot_ = (startup_slot > 4) ? 0 : startup_slot;
 		DLOG_C("PakRouter::set_startup_slot %d\n",startup_slot_);
 	}
@@ -47,7 +47,7 @@ namespace VCC::Core
 	// reset() is invoked on hard reset or power up.
 	void PakRouter::reset()
 	{
-		scs_slot_ = cts_slot_ = startup_slot_;  // FIXME Reset does not read startup slot
+		scs_slot_ = cts_slot_ = startup_slot_;
 		DLOG_C("PakRouter::reset\n");
 	}
 
