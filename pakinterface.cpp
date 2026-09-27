@@ -26,11 +26,11 @@
 #include "Vcc.h"
 #include "mc6821.h"
 #include "resource.h"
+#include "pakrouter.h"
 #include <vcc/bus/null_cartridge.h>
 #include <vcc/bus/cartridge_menu.h>
 #include <vcc/bus/cartridge_messages.h>
 #include <vcc/bus/dll_deleter.h>
-#include <vcc/bus/pakrouter.h>
 #include <vcc/util/limits.h>
 #include <vcc/util/logger.h>
 #include <vcc/util/FileOps.h>
@@ -75,65 +75,34 @@ static cartridge_loader_status LoadCartridge(int slot, const char *filename);
 //==========================================================================
 
 //--------------------------------------------------------
-// CPAK cartridge callbacks
+// Slot callback implimenters
 //--------------------------------------------------------
-struct vcc_cartridge_callbacks : public ::VCC::Core::cartridge_callbacks
-{
-// configuration_path() is not a CPU thread callback.  Logging seems to
-// indicate this is not used.  TODO: investigate how plugins can know if
-// ini file has has been changed.  
-	path_type configuration_path() const override
-	{
-		char path_buffer[MAX_PATH];
-		GetIniFilePath(path_buffer);
-DLOG_C("*** Get ini file path %s \n",path_buffer);
-		return path_buffer;
-	}
 
-// Following are CPU callbacks that a plugin can make.
-// TODO: These should be for CTS slot only
+static void write_memory_byte_impl(size_t slot, unsigned char val, unsigned short adr) {
+	//MemWrite8(val, adr);
+	gPakRouter.cart_write_memory(slot, val, adr);
+}
+static unsigned char read_memory_byte_impl(size_t slot,unsigned short adr) {
+	//return MemRead8(adr);
+    return gPakRouter.cart_read_memory(slot, adr);
+}
+static void assert_cart_line_impl(size_t slot,bool state) {
+	//SetCart(state);
+    gPakRouter.cart_assert_line(slot, state);
+}
+static void assert_interrupt_impl(size_t slot, Interrupt intr, InterruptSource src) {
+	//PakAssertInterupt(intr, src);
+    gPakRouter.cart_assert_interrupt(slot, intr, src);
+}
 
-	void write_memory_byte(unsigned char value, unsigned short address) override
-	{
-		MemWrite8(value, address);
-	}
-
-	unsigned char read_memory_byte(unsigned short address) override
-	{
-		return MemRead8(address);
-	}
-
-	void assert_cartridge_line(bool line_state) override
-	{
-		SetCart(line_state);
-	}
-
-	void assert_interrupt(Interrupt interrupt, InterruptSource interrupt_source) override
-	{
-		PakAssertInterupt(interrupt, interrupt_source);
-	}
+// The same call back table is passed to all cart plugins.
+// The pakrouter decides implementation based on slot used
+struct cpak_callbacks slot_callbacks = {
+	assert_interrupt_impl,
+	assert_cart_line_impl,
+	write_memory_byte_impl,
+	read_memory_byte_impl
 };
-
-static void PakAssertCartrigeLine(slot_id_type /*SlotId*/, bool line_state)
-{
-	SetCart(line_state);
-}
-
-static void PakWriteMemoryByte(slot_id_type /*SlotId*/, unsigned char data, unsigned short address)
-{
-	MemWrite8(data, address);
-}
-
-static unsigned char PakReadMemoryByte(slot_id_type /*SlotId*/, unsigned short address)
-{
-	return MemRead8(address);
-}
-
-static void PakAssertInterupt(slot_id_type /*SlotId*/, Interrupt interrupt, InterruptSource source)
-{
-	PakAssertInterupt(interrupt, source);
-}
-
 
 //--------------------------------------------------------
 //	Plugin exports
@@ -170,8 +139,7 @@ unsigned char PakReadPort (unsigned char port)
 
 	if (gCartSlots[0])
 		return gCartSlots[0]->read_port(port);
-	else
-		return 0;
+	return 0;
 }
 
 void PakWritePort(unsigned char Port,unsigned char Data)
@@ -184,6 +152,8 @@ void PakWritePort(unsigned char Port,unsigned char Data)
 
 unsigned char PackMem8Read (unsigned short Address)
 {
+PrintLogC("%");
+//	return gPakRouter.read_memory_byte(Address&32767);
 	VCC::Util::section_locker lock(gPakMutex);
 	if (gCartSlots[0])
 		return gCartSlots[0]->read_memory_byte(Address&32767);
@@ -356,15 +326,15 @@ void UnloadDll()
 //--------------------------------------------------------
 static cartridge_loader_status LoadCartridge(int slot, const char *filename)
 {
-	cpak_callbacks callbacks{
-		PakAssertInterupt,
-		PakAssertCartrigeLine,
-		PakWriteMemoryByte,
-		PakReadMemoryByte
-	};
+//	cpak_callbacks callbacks{
+//		PakAssertInterupt,
+//		PakAssertCartrigeLine,
+//		PakWriteMemoryByte,
+//		PakReadMemoryByte
+//	};
 
 	slot_id_type SlotId = slot;
-	auto adapter = std::make_unique<vcc_cartridge_callbacks>();
+//	auto adapter = std::make_unique<vcc_cartridge_callbacks>();
 
 	// DLL plugins need ini file path so they can manage settings
 	char iniPath[MAX_PATH]="";
@@ -373,11 +343,12 @@ static cartridge_loader_status LoadCartridge(int slot, const char *filename)
 	// Load the cartridge
 	auto loadedCartridge = VCC::Core::load_cartridge(
 		filename,
-		std::move(adapter),
+		nullptr,
+//		std::move(adapter),
 		SlotId,
 		iniPath,
 		EmuState.hMsgProxy,
-		callbacks);
+		slot_callbacks);
 
 	if (loadedCartridge.load_result != cartridge_loader_status::success) {
 		DLOG_C("pakinterface LoadCartridge slot %d %s failed\n", slot, filename);
@@ -387,6 +358,7 @@ static cartridge_loader_status LoadCartridge(int slot, const char *filename)
 	DLOG_C("pakinterface LoadCartridge slot %d %s ptr:%p, inst:%p\n",
 		   slot, filename, loadedCartridge.cartridge.get(), GetModuleHandle(filename));
 
+	// Unload current cart in slot (could be the empty cartridge)
 	UnloadCartridge(slot);
 	if (slot == 0) gPakRouter.set_startup_slot(0);
 
@@ -435,7 +407,7 @@ void UnloadPack()
 	UnloadCartridge(0);
 	strcpy(DllPath,"");
 	SetCart(0);
-//gPakRouter.reset();
+	//gPakRouter.reset();
 	EmuState.ResetPending=2;
 
 	char inifile[MAX_PATH];

@@ -114,14 +114,6 @@ void configuration_dialog::select_new_cartridge(unsigned int item)
 			} else {
 				configuration_.last_accessed_rom_path(dlg.getdir());
 			}
-
-			// This will cause crash if slot is active
-			DLOG_C("MPI sending slot %d new load %s\n",slot+1,dlg.path());
-			PluginMsgData slotData{};
-			slotData.size = sizeof(PluginMsgData);
-			strcpy_s(slotData.pluginPath, MAX_PATH, dlg.path());
-			SendLoadSlot(gVccWnd, slot+1, slotData); // Slot is 1-4
-
 		}
 
 	}
@@ -152,8 +144,6 @@ void configuration_dialog::set_selected_slot(size_t slot)
 	mpi_.switch_to_slot(slot);
 	configuration_.selected_slot(slot);
 
-//	// Send startup slot to WndProc (0-3 maps to mpi slots 1-4)
-//	SendStartSlot(gVccWnd, slot);
 }
 
 
@@ -226,10 +216,6 @@ void configuration_dialog::eject_or_select_new_cartridge(unsigned int Button)
 
 	if (!mpi_.empty(slot))
 	{
-
-//PrintLogC("MPI sending slot unload\n");
-//		SendUnloadSlot(gVccWnd, slot+1); // Slot is 1-4
-
 		mpi_.eject_cartridge(slot);
 		configuration_.slot_cartridge_path(slot, {});
 		update_slot_details(slot);
@@ -312,7 +298,6 @@ INT_PTR configuration_dialog::process_message(
 			return TRUE;
 		case IDC_RESET:
 			SendHardReset(gVccWnd);
-//SendStartSlot(gVccWnd, slot);
 			close();
 			return TRUE;
 		case IDOK:

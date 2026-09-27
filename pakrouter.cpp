@@ -17,15 +17,17 @@
 //	VCC (Virtual Color Computer). If not, see <http://www.gnu.org/licenses/>.
 ////////////////////////////////////////////////////////////////////////////////
 
+#include "pakrouter.h"
 #include <vcc/bus/cartridge.h>
 #include <vcc/bus/cpak_cartridge.h>
-#include <vcc/bus/pakrouter.h>
 #include <vcc/util/logger.h>
 #include <typeinfo>
+#include <algorithm>
 
-// pakrouter handles routing and control of cpu driven plugin exports.
+// pakrouter handles routing and control of the plugin binary interface
 // An array of pointers to installed plugin objects is used. The array
 // contains five slots, 0 = boot slot, 1..4 are MPI slots, if present.
+// binary calls are routed to/from either boot slot or the MPI slots.
 
 namespace VCC::Core
 {
@@ -67,31 +69,60 @@ namespace VCC::Core
 		DLOG_C("\n");
 	}
 
-	// horizontal sync
+	// Horizontal sync
 	void PakRouter::process_horizontal_sync()
 	{
-		for_each_slot([&](auto* cart){
-    		cart->process_horizontal_sync();
-		});
+		if (mpi_not_active()) {
+			slot_process_hsync(0);
+			return;
+		}
+		for (int i = 4; i > 0; i--)
+			slot_process_hsync(i);
 	}
 
-	// Audio samples.
+	// Sample audio
 	unsigned short PakRouter::sample_audio()
 	{
-		unsigned short sample = 0;
-		for_each_slot([&](auto* cart){
-			sample += cart->sample_audio();
-		});
-		return sample;
+		// Cartridge audio is two packed unsigned 8-bit channels. Audio-producing
+		// cartridges use 0x80 as the midpoint level, while cartridges without
+		// PakSampleAudio return 0 through the compatibility shim. The old code 
+		// added complete 16-bit packed samples, which allowed the right channel
+		// to carry into the left channel and made two 0x8080 midpoint samples wrap to
+		// 0x0100. Mix the channels independently around 0x80 instead.
+		// ALTERNATE: Return after first cart that supplies a non-zero sample???
+	
+		int left = 0;
+		int right = 0;
+		int mask = 0xFF;
+		int center = 0x80;
+		bool have_sample = false;
+
+		// if mpi is not loaded return sample from boot slot
+		if (mpi_not_active()) {
+			return slot_sample_audio(0);
+		}
+		// sum samples for MPI slots
+		for (int i = 1; i <= 4; i++) {
+			int sample = slot_sample_audio(i);
+			if (sample != 0) {
+				have_sample = true;
+				left += ((sample >> 8) & mask) - center;
+				right += (sample & mask) - center;
+			}
+		};
+		if (!have_sample) return 0;
+		left = std::clamp(left + center, 0, mask);
+		right = std::clamp(right + center, 0, mask);
+		return right + (left << 8);
 	}
 
 	// Cart memory reads only from CTS slot
 	unsigned char PakRouter::read_memory_byte(unsigned short address)
 	{
-		auto* cart = slots_[cts_slot_];
-		return cart->read_memory_byte(address);
+		return PakRouter::slot_read_memory(cts_slot_,address);
 	}
 
+	// Write to port
 	void PakRouter::write_port(unsigned char port, unsigned char value)
 	{
 		// Slot-select register (0x7F)
@@ -104,16 +135,16 @@ namespace VCC::Core
 		}
 		// Disk controller ports (0x40–0x5F) scs slot only
 		if (is_disk_port(port)) {
-			auto* cart = slots_[scs_slot_];
-			if (cart) cart->write_port(port, value);
+			PakRouter::slot_write_port(scs_slot_, port, value);
 			return;
 		}
 		// Broadcast other port writes
-		for_each_slot([&](auto* cart){
-    		cart->write_port(port, value);
-		});
+		for (int i = 4; i > 0; i--) {
+			PakRouter::slot_write_port(i, port, value);
+		}
 	}
 
+	// Read port
 	unsigned char PakRouter::read_port(unsigned char port)
 	{
 		// Slot-select register (0x7F)
@@ -122,21 +153,16 @@ namespace VCC::Core
 		}
 		// Disk controller ports (0x40–0x5F) scs slot only
 		if (is_disk_port(port)) {
-			auto* cart = slots_[scs_slot_];
-			return cart ? cart->read_port(port) : 0;
+			return PakRouter::slot_read_port(scs_slot_, port);
 		}
 		// No MPI slot zero only
-		if (cts_slot_ < 1) {
-			auto* cart = slots_[0];
-			if (!cart) return 0;
-			return cart->read_port(port);
+		if (mpi_not_active()) {
+			return PakRouter::slot_read_port(0, port);
 		}
 		// MPI ports priority scan
 		for (int i = 4; i > 0; i--) {
-			auto* cart = slots_[i];
-			if (!cart) continue;
-			unsigned char data = cart->read_port(port);
-			if (data != 0) return data;
+			unsigned char data = PakRouter::slot_read_port(i, port);
+			if (data != i) return data;
 		}
 		return 0;
 	}

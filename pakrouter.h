@@ -17,6 +17,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 
+#include "mc6821.h"
+#include "MachineDefs.h"
+#include "tcc1014registers.h"
+#include "tcc1014mmu.h"
 #include <array>
 #include <vcc/bus/cartridge.h>
 #include <vcc/bus/cpak_cartridge.h>
@@ -40,11 +44,81 @@ namespace VCC::Core
 		unsigned char read_memory_byte(unsigned short address);
 		unsigned short sample_audio();
 
-	private:
-		inline bool is_disk_port(int port) { return port >= 0x40 && port <= 0x5F; }
+		// Callbacks
+		void cart_write_memory(int slot, unsigned char val, unsigned short adr) {
+			MemWrite8(val, adr);
+		};
+		unsigned char cart_read_memory(int slot,unsigned short adr){
+			return MemRead8(adr);
+		};
+		void cart_assert_line(int slot, bool state){
+			SetCart(state);
+		};
+		void cart_assert_interrupt(int slot, Interrupt intr, InterruptSource src){
+			(void) src; // not used
+			switch (intr) {
+			case INT_CART:
+				GimeAssertCartInterupt();
+				break;
+			case INT_NMI:
+				CPUAssertInterupt(IS_NMI, INT_NMI);
+			break;
+			}
+		};
 
-	    template<typename F>
-	    void for_each_slot(F func);
+	private:
+
+		// Test if a disk port
+		inline bool is_disk_port(int port)
+		{ 
+			return port >= 0x40 && port <= 0x5F;
+		}
+
+		// Test for inactive MPI
+		inline bool mpi_not_active() const
+		{
+			return cts_slot_ < 1;
+		}
+
+		// slot hsync 
+		inline void slot_process_hsync(int slot)
+		{
+			if (auto* cart = slots_[slot])
+        		cart->process_horizontal_sync();
+		}
+
+		// get audio sample from slot 
+		inline int slot_sample_audio(int slot)
+		{
+			if (auto* cart = slots_[slot])
+				return cart->sample_audio();
+			return 0;
+		}
+
+		// Read slot memory
+		inline unsigned char slot_read_memory(int slot, unsigned short address)
+		{
+			if (auto* cart = slots_[slot])
+				return cart->read_memory_byte(address);
+			return 0;
+		}
+
+		// Write slot port
+		inline void slot_write_port(int slot,unsigned char port, unsigned char value)
+		{
+			if (auto* cart = slots_[slot])
+				cart->write_port(port, value);
+		}
+
+		// Read slot port
+		inline unsigned char slot_read_port(int slot, unsigned char port)
+		{
+			if (auto* cart = slots_[slot])
+				return cart->read_port(port);
+			return 0;
+		}
+
+	private:
 
 		// Cartridge slots: 0 = boot slot, 1..4 = MPI slots
 		std::array<cartridge*, 5> slots_;
@@ -54,23 +128,5 @@ namespace VCC::Core
 		int scs_slot_;     // disk controller slot
 		int cts_slot_;     // cartridge slot
 	};
+}
 
-	// Template to broadcast function to all slots
-	// If only the boot slot is loaded, just do that one
-	// If mpi slots are loaded do them all in 4 3 2 1 order
-	template<typename F>
-	void PakRouter::for_each_slot(F func)
-	{
-		// Boot-only mode: only slot 0
-		if (cts_slot_ < 1) {
-			auto* cart = slots_[0];
-			if (cart) func(cart);
-			return;
-		}
-		// MPI-active mode: scan 4 > 1
-		for (int i = 4; i > 0; i--) {
-			auto* cart = slots_[i];
-			if (cart) func(cart);
-		}
-	}
-};

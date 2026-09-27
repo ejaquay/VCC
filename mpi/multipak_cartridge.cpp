@@ -71,7 +71,7 @@ void multipak_cartridge::start()
 	cached_cts_slot_ = switch_slot_;
 	cached_scs_slot_ = switch_slot_;
 
-	// Send startup slot to WndProc
+	// *NEW* Send startup slot to WndProc
 	SendStartSlot(gVccWnd, switch_slot_);
 
 	// Mount them
@@ -82,16 +82,9 @@ void multipak_cartridge::start()
 		if (!path.empty())
 		{
 			if (mount_cartridge(mpi_slot, path) != VCC::Core::cartridge_loader_status::success) {
-				DLOG_C("MPI Clearing configured slot path %d\n",mpi_slot);
+				DLOG_C("MPI start Clearing configured slot path %d\n",mpi_slot);
 				configuration_.slot_cartridge_path(mpi_slot,"");
 			}
-			// Send mount to pakinterface
-			// Send load slot message to WndProc
-			DLOG_C("MPI sending initial slot %d load %s\n",mpi_slot+1,path.c_str());
-			PluginMsgData slotData{};
-			slotData.size = sizeof(PluginMsgData);
-			strcpy_s(slotData.pluginPath, MAX_PATH, path.c_str());
-			SendLoadSlot(gVccWnd, mpi_slot+1, slotData); // Slot is 1-4
 		}
 	}
 }
@@ -360,7 +353,7 @@ void multipak_cartridge::eject_cartridge(slot_id_type mpi_slot)
 		SendStartSlot(gVccWnd, 0);
 		SendHardReset(gVccWnd);
 
-	DLOG_C("MPI sending slot %d unload\n",mpi_slot+1);
+	DLOG_C("MPI eject_cartridge sending slot %d unload\n",mpi_slot+1);
 	SendUnloadSlot(gVccWnd, mpi_slot+1); // Slot is 1-4
 
 	SendMessage(gVccWnd,WM_VCC_UPD_MENU,(WPARAM) 0,(LPARAM) 0);
@@ -391,7 +384,6 @@ multipak_cartridge::mount_status_type multipak_cartridge::mount_cartridge(
 	};
 	
 	std::size_t SlotId = mpi_slot + 1;
-	DLOG_C("MPI slot %3d callbacks %p %p %p %p %p\n",SlotId,cpak_callbacks);
 
 	// ctx is passed to the loader but not to cartridge DLL's
 	auto* parent = this;
@@ -400,7 +392,6 @@ multipak_cartridge::mount_status_type multipak_cartridge::mount_cartridge(
 		*callbacks_,
 		*parent );
 
-	DLOG_C("MPI load cart %d  %s\n",SlotId,filename);
 	auto loadedCartridge = VCC::Core::load_cartridge(
 		filename,
 		std::move(slot_adapter),
@@ -437,9 +428,17 @@ multipak_cartridge::mount_status_type multipak_cartridge::mount_cartridge(
 	slots_[mpi_slot].start();
 	slots_[mpi_slot].reset();
 
-	DLOG_C("MPI multipak slot loaded %d %s\n",mpi_slot+1,filename);
-	
+	DLOG_C("MPI mount_cartridge load slot %d %s\n",mpi_slot+1,filename.c_str());
+
+	// *NEW* Send load slot request message to WndProc
+	PluginMsgData slotData{};
+	slotData.size = sizeof(PluginMsgData);
+	strcpy_s(slotData.pluginPath, MAX_PATH, filename.c_str());
+	SendLoadSlot(gVccWnd, mpi_slot+1, slotData); // Slot is 1-4
+
+	// Send menu update to WndProc
 	SendMessage(gVccWnd,WM_VCC_UPD_MENU,(WPARAM) 0,(LPARAM) 0);
+
 	return loadedCartridge.load_result;
 }
 
@@ -461,7 +460,7 @@ multipak_cartridge::slot_id_type multipak_cartridge::selected_scs_slot() const
 
 void multipak_cartridge::assert_cartridge_line(slot_id_type mpi_slot, bool line_state)
 {
-	DLOG_C("multipak_cartridge::assert_cartridge_line cart: %d state: %d scs: %d\n",
+	DLOG_C("MPI assert_cartridge_line cart: %d state: %d scs: %d\n",
 			mpi_slot,line_state,selected_scs_slot());
 
 	VCC::Util::section_locker lock(mutex_);
