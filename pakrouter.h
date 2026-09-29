@@ -39,6 +39,9 @@ namespace VCC::Core
 		unsigned char read_memory_byte(unsigned short address);
 		unsigned short sample_audio();
 
+		// Render loop callbacks
+		void plugin_status(char * txt, size_t len);
+
 		// Plugin cpu loop callbacks
 		void cart_write_memory(int slot, unsigned char val, unsigned short adr);
 		unsigned char cart_read_memory(int slot,unsigned short adr);
@@ -57,6 +60,13 @@ namespace VCC::Core
 		inline bool mpi_not_active() const
 		{
 			return cts_slot_ == 0;
+		}
+
+		// Get plugin status text
+		inline void slot_get_status(int slot, char * buf, size_t len)
+		{
+			if (auto* cart = slots_[slot])
+				cart->status(buf,len);
 		}
 
 		// slot hsync 

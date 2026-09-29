@@ -118,11 +118,9 @@ void ResetBus()
 	gCartSlots[0]->reset();
 }
 
-//TODO
 void GetModuleStatus(SystemState *SMState)
 {
-	VCC::Util::section_locker lock(gPakMutex);
-	gCartSlots[0]->status(SMState->StatusLine, sizeof(SMState->StatusLine));
+	gPakRouter.plugin_status(SMState->StatusLine,sizeof(SMState->StatusLine));
 }
 
 unsigned char PakReadPort (unsigned char port)
@@ -150,7 +148,6 @@ unsigned short PackAudioSample()
 {
 	VCC::Util::section_locker lock(gPakMutex);
 	return gPakRouter.sample_audio();
-
 }
 
 //--------------------------------------------------------

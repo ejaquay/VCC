@@ -165,6 +165,7 @@ void multipak_cartridge::write_port(unsigned char port_id, unsigned char value)
 
 unsigned char multipak_cartridge::read_port(unsigned char port_id)
 {
+/*
 	VCC::Util::section_locker lock(mutex_);
 
 	// slot_select_port_id is 0x7f
@@ -192,18 +193,23 @@ unsigned char multipak_cartridge::read_port(unsigned char port_id)
 			return data;
 		}
 	}
+*/
 
 	return 0;
 }
 
 unsigned char multipak_cartridge::read_memory_byte(unsigned short memory_address)
 {
+/*
 	VCC::Util::section_locker lock(mutex_);
 	return slots_[cached_cts_slot_].read_memory_byte(memory_address);
+*/
+	return 0;
 }
 
 void multipak_cartridge::status(char* text_buffer, size_t buffer_size)
 {
+/*
 	VCC::Util::section_locker lock(mutex_);
 
 	char TempStatus[64] = "";
@@ -219,10 +225,12 @@ void multipak_cartridge::status(char* text_buffer, size_t buffer_size)
 			strcat(text_buffer, TempStatus);
 		}
 	}
+*/
 }
 
 unsigned short multipak_cartridge::sample_audio()
 {
+/*
 	VCC::Util::section_locker lock(mutex_);
 
 	// 780TECH:
@@ -258,6 +266,8 @@ unsigned short multipak_cartridge::sample_audio()
 	right = std::clamp(right + c, 0, 255);
 
 	return static_cast<unsigned short>((left << 8) | right);
+*/
+	return 0;
 }
 
 void multipak_cartridge::menu_item_clicked(unsigned char menu_item_id)
@@ -435,7 +445,6 @@ multipak_cartridge::mount_status_type multipak_cartridge::mount_cartridge(
 	slots_[mpi_slot].reset();
 
 	DLOG_C("MPI mount_cartridge load slot %d %s\n",mpi_slot+1,filename.c_str());
-
 	// *NEW* Send load slot request message to WndProc
 	PluginMsgData slotData{};
 	slotData.size = sizeof(PluginMsgData);
@@ -444,8 +453,13 @@ multipak_cartridge::mount_status_type multipak_cartridge::mount_cartridge(
 
 	// Send menu update to WndProc
 	SendMessage(gVccWnd,WM_VCC_UPD_MENU,(WPARAM) 0,(LPARAM) 0);
-
 	return loadedCartridge.load_result;
+
+/*
+	multipak_cartridge::mount_status_type foo{};
+	return foo;
+*/
+
 }
 
 // The following has no effect until VCC is reset

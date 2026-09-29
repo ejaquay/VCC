@@ -79,12 +79,10 @@ namespace VCC::Core
 
 	// Callbacks
 	void PakRouter::cart_write_memory(int slot, unsigned char val, unsigned short adr) {
-//DLOG_C("%dw ",slot);
 		MemWrite8(val, adr);
 	};
 
 	unsigned char PakRouter::cart_read_memory(int slot,unsigned short adr){
-//DLOG_C("%dr ",slot);
 		return MemRead8(adr);
 	};
 
@@ -94,7 +92,6 @@ namespace VCC::Core
 	};
 
 	void PakRouter::cart_assert_interrupt(int slot, Interrupt intr, InterruptSource src){
-//		DLOG_C("PakRouter interupt slot:%d int:%d\n", slot, intr);
 		(void) src; // not used
 		switch (intr) {
 		case INT_CART:
@@ -162,7 +159,14 @@ namespace VCC::Core
 	// Write to port
 	void PakRouter::write_port(unsigned char port, unsigned char value)
 	{
-//DLOG_C("pw p:%d v:%d\n",port,value);
+		// No mpi just write the port. For sure we don't want to
+		// mess with the pakrouter's idea of what scs and cts are
+		if (mpi_not_active()) {
+			if (auto* cart = slots_[0])
+				cart->write_port(port, value);
+			return;
+		}
+
 		// Slot-select register (0x7F)
 		if (port == 0x7F) {
 			int scs = value & 3;
@@ -185,7 +189,13 @@ namespace VCC::Core
 	// Read port
 	unsigned char PakRouter::read_port(unsigned char port)
 	{
-//DLOG_C("pr p:%d v:%d\n",port);
+		// No mpi just return what ever the port says
+		if (mpi_not_active()) {
+			if (auto* cart = slots_[0])
+				return cart->read_port(port);
+			return 0;
+		}
+
 		// Slot-select register (0x7F)
 		if (port == 0x7F) {
 			int scs = (scs_slot_ -1) & 3;
@@ -206,5 +216,29 @@ namespace VCC::Core
 			if (data != i) return data;
 		}
 		return 0;
+	}
+
+	// Get plugins status line
+	void PakRouter::plugin_status(char * txt, size_t len)
+	{
+		if (mpi_not_active()) {
+			// Oversize buf status buf attempt to limit how much is used
+			char tmp[64]{};
+			PakRouter::slot_get_status(0,tmp,24);
+			if (tmp[0]) {
+				strncpy(txt,tmp,32);
+			}
+			return;
+		}
+		snprintf(txt,len,"MPI:%d,%d",cts_slot_,scs_slot_);
+		for (unsigned int i=1; i<=4; i++)
+		{
+			char tmp[64]{};
+			PakRouter::slot_get_status(i,tmp,24);
+			if (tmp[0]) {
+				strncat(txt," | ",len);
+				strncat(txt,tmp,32);
+			}
+		}
 	}
 }
