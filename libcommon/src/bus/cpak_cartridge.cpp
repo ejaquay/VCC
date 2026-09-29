@@ -1,3 +1,4 @@
+//#define USE_LOGGING
 ////////////////////////////////////////////////////////////////////////////////
 //	Copyright 2015 by Joseph Forgione
 //	This file is part of VCC (Virtual Color Computer).
@@ -16,11 +17,10 @@
 //	VCC (Virtual Color Computer). If not, see <http://www.gnu.org/licenses/>.
 ////////////////////////////////////////////////////////////////////////////////
 
-// TODO: Rename this to hardware_cartridge (cpak_cartridge?)
-
 #include <vcc/bus/cpak_cartridge.h>
 #include <vcc/bus/cartridge_menuitem.h>
 #include <stdexcept>
+#include <vcc/util/logger.h>
 
 namespace VCC::Core
 {
@@ -148,6 +148,7 @@ namespace VCC::Core
 
 	void cpak_cartridge::start()
 	{
+		DLOG_C("+++ cpak_cartridge::start %d +++\n",SlotId_);
 		initialize_(SlotId_, configuration_path_.c_str(), hVccWnd_, &cpak_callbacks_);
 	}
 

@@ -1,4 +1,4 @@
-#define USE_LOGGING
+//#define USE_LOGGING
 //======================================================================
 // This file is part of VCC (Virtual Color Computer).
 // Vcc is Copyright 2015 by Joseph Forgione
@@ -78,25 +78,21 @@ static cartridge_loader_status LoadCartridge(int slot, const char *filename);
 // Slot callback implimenters
 //--------------------------------------------------------
 
+// The same call back table is passed to all cart plugins.
+// The pakrouter decides implementation based on slot used
+
 static void write_memory_byte_impl(size_t slot, unsigned char val, unsigned short adr) {
-	//MemWrite8(val, adr);
 	gPakRouter.cart_write_memory(slot, val, adr);
 }
 static unsigned char read_memory_byte_impl(size_t slot,unsigned short adr) {
-	//return MemRead8(adr);
     return gPakRouter.cart_read_memory(slot, adr);
 }
 static void assert_cart_line_impl(size_t slot,bool state) {
-	//SetCart(state);
     gPakRouter.cart_assert_line(slot, state);
 }
 static void assert_interrupt_impl(size_t slot, Interrupt intr, InterruptSource src) {
-	//PakAssertInterupt(intr, src);
     gPakRouter.cart_assert_interrupt(slot, intr, src);
 }
-
-// The same call back table is passed to all cart plugins.
-// The pakrouter decides implementation based on slot used
 struct cpak_callbacks slot_callbacks = {
 	assert_interrupt_impl,
 	assert_cart_line_impl,
@@ -106,59 +102,48 @@ struct cpak_callbacks slot_callbacks = {
 
 //--------------------------------------------------------
 //	Plugin exports
-// TODO: Each export handle all slots
 //--------------------------------------------------------
 
 void PakTimer()
 {
 	VCC::Util::section_locker lock(gPakMutex);
-	if (gCartSlots[0])
-		gCartSlots[0]->process_horizontal_sync();
+	gPakRouter.process_horizontal_sync();
+//	gCartSlots[0]->process_horizontal_sync();
 }
 
+//TODO
 void ResetBus()
 {
 	VCC::Util::section_locker lock(gPakMutex);
-	if (gCartSlots[0])
-		gCartSlots[0]->reset();
+	gCartSlots[0]->reset();
 }
 
+//TODO
 void GetModuleStatus(SystemState *SMState)
 {
 	VCC::Util::section_locker lock(gPakMutex);
-	if (gCartSlots[0])
-		gCartSlots[0]->status(SMState->StatusLine, sizeof(SMState->StatusLine));
+	gCartSlots[0]->status(SMState->StatusLine, sizeof(SMState->StatusLine));
 }
 
 unsigned char PakReadPort (unsigned char port)
 {
 	VCC::Util::section_locker lock(gPakMutex);
-
-//	once pakrouter is implimented this becomes simply
-//	return gPakRouter.read_port(port);
-
-	if (gCartSlots[0])
-		return gCartSlots[0]->read_port(port);
-	return 0;
+	return gPakRouter.read_port(port);
+//	return gCartSlots[0]->read_port(port);
 }
 
 void PakWritePort(unsigned char Port,unsigned char Data)
 {
 	VCC::Util::section_locker lock(gPakMutex);
-	//gActiveCartrige->write_port(Port,Data);
-	if (gCartSlots[0])
-		gCartSlots[0]->write_port(Port,Data);
+	gPakRouter.write_port(Port,Data);
+//	gCartSlots[0]->write_port(Port,Data);
 }
 
 unsigned char PackMem8Read (unsigned short Address)
 {
-PrintLogC("%");
-//	return gPakRouter.read_memory_byte(Address&32767);
 	VCC::Util::section_locker lock(gPakMutex);
-	if (gCartSlots[0])
-		return gCartSlots[0]->read_memory_byte(Address&32767);
-	else
-		return 0;
+	return gPakRouter.read_memory_byte(Address&32767);
+//	return gCartSlots[0]->read_memory_byte(Address&32767);
 }
 
 unsigned short PackAudioSample()
@@ -318,7 +303,7 @@ void UnloadCartridge(int slot)
 void UnloadDll()
 {
 	UnloadCartridge(0);
-	gPakRouter.set_startup_slot(0);
+	gPakRouter.set_active_slot(0);
 }
 
 //--------------------------------------------------------
@@ -326,15 +311,7 @@ void UnloadDll()
 //--------------------------------------------------------
 static cartridge_loader_status LoadCartridge(int slot, const char *filename)
 {
-//	cpak_callbacks callbacks{
-//		PakAssertInterupt,
-//		PakAssertCartrigeLine,
-//		PakWriteMemoryByte,
-//		PakReadMemoryByte
-//	};
-
 	slot_id_type SlotId = slot;
-//	auto adapter = std::make_unique<vcc_cartridge_callbacks>();
 
 	// DLL plugins need ini file path so they can manage settings
 	char iniPath[MAX_PATH]="";
@@ -344,7 +321,6 @@ static cartridge_loader_status LoadCartridge(int slot, const char *filename)
 	auto loadedCartridge = VCC::Core::load_cartridge(
 		filename,
 		nullptr,
-//		std::move(adapter),
 		SlotId,
 		iniPath,
 		EmuState.hMsgProxy,
@@ -355,12 +331,16 @@ static cartridge_loader_status LoadCartridge(int slot, const char *filename)
 		return loadedCartridge.load_result;
 	}
 
-	DLOG_C("pakinterface LoadCartridge slot %d %s ptr:%p, inst:%p\n",
-		   slot, filename, loadedCartridge.cartridge.get(), GetModuleHandle(filename));
+    //DLOG_C("pakinterface load slot %d %s cb: w=%p l=%p r=%p i=%p\n",
+	//	slot, filename,
+	//	slot_callbacks.write_memory_byte,
+    //	slot_callbacks.assert_cartridge_line,
+    //	slot_callbacks.read_memory_byte,
+    //	slot_callbacks.assert_interrupt);
 
 	// Unload current cart in slot (could be the empty cartridge)
 	UnloadCartridge(slot);
-	if (slot == 0) gPakRouter.set_startup_slot(0);
+	if (slot == 0) gPakRouter.set_active_slot(0);
 
 	VCC::Util::section_locker lock(gPakMutex);
 	strcpy(DllPath, filename);
@@ -375,6 +355,7 @@ static cartridge_loader_status LoadCartridge(int slot, const char *filename)
 		SendMessage(EmuState.WindowHandle,WM_VCC_UPD_MENU,(WPARAM) 0,(LPARAM) 0);
 	} else {
 		// TODO:  Initialize the cartridge. Does this cause a reload? (later)
+		DLOG_C("pakinterface initialize cart slot %d\n\n",slot);
 		gCartSlots[slot]->start();
 	}
 
@@ -407,7 +388,7 @@ void UnloadPack()
 	UnloadCartridge(0);
 	strcpy(DllPath,"");
 	SetCart(0);
-	//gPakRouter.reset();
+	gPakRouter.set_active_slot(0);
 	EmuState.ResetPending=2;
 
 	char inifile[MAX_PATH];
@@ -420,6 +401,7 @@ void UnloadPack()
 //--------------------------------------------------------
 void LoadPack(int type) {
 	PakLoadCartridgeUI(type);
+	gPakRouter.set_active_slot(0);
 	EmuState.ResetPending=2;
 }
 
@@ -472,20 +454,16 @@ void CartMenuActivated(unsigned int MenuID)
 
 // Set startup slot currenly comes from a radio button click in the MPI.
 // TODO: Vcc init sets it to zero.  MPI send it from settings via message.
-// mpi/configuration_dialog.cpp:156
-// mpi/configuration_dialog.cpp:315
-// mpi/multipak_cartridge.cpp:75
-// mpi/multipak_cartridge.cpp:334
-bool SetStartupSlot(unsigned int startup_cts)
+bool SetActiveSlot(unsigned int cts)
 {
-	DLOG_C("Pakinterface SetStartupSlot CTS/SCS: %d\n",startup_cts);
+	DLOG_C("Pakinterface SetActiveSlot CTS/SCS: %d\n",cts);
 
 	// Startup sllot is 0-4 (cts+1).  This allows the pakrouter to decide where to
 	// apply memory and regsister I/O requests from the Coco CPU.  If startup slot
 	// is zero the MPI slots are ignored. If start up slot is non zero it controls
 	// the cts/scs functions of the mpi slots, numbered 1-4.
 
-	gPakRouter.set_startup_slot(startup_cts+1);
+	gPakRouter.set_active_slot(cts+1);
 	return true;
 }
 
@@ -496,7 +474,7 @@ bool SetStartupSlot(unsigned int startup_cts)
 bool UnloadSlot(unsigned int slot)
 {
 	DLOG_C("Pakinterface UnloadSlot: %d\n",slot);
-	//if (slot == 0) SetStartupSlot(0);  //TODO: MPI should do this
+	if (slot == 0) SetActiveSlot(0);
 	UnloadCartridge(slot);
 	return true;
 }

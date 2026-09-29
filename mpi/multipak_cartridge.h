@@ -79,7 +79,7 @@ public:
 	slot_id_type selected_switch_slot() const;
 	slot_id_type selected_scs_slot() const;
 
-	// Make automatic when mounting, ejecting, selecting slot, etc.
+	// Make automatic when mounting, ejecting, selecting slot, etc. TODO: is this done??
 	void assert_cartridge_line(slot_id_type slot, bool line_state);
 
 private:

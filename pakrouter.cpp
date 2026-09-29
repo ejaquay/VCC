@@ -1,4 +1,4 @@
-#define USE_LOGGING
+//#define USE_LOGGING
 ////////////////////////////////////////////////////////////////////////////////
 //	Copyright 2015 by Joseph Forgione
 //	This file is part of VCC (Virtual Color Computer).
@@ -17,7 +17,12 @@
 //	VCC (Virtual Color Computer). If not, see <http://www.gnu.org/licenses/>.
 ////////////////////////////////////////////////////////////////////////////////
 
+#include "mc6821.h"
+#include "MachineDefs.h"
+#include "tcc1014registers.h"
+#include "tcc1014mmu.h"
 #include "pakrouter.h"
+#include <array>
 #include <vcc/bus/cartridge.h>
 #include <vcc/bus/cpak_cartridge.h>
 #include <vcc/util/logger.h>
@@ -33,23 +38,26 @@ namespace VCC::Core
 {
 	PakRouter::PakRouter()
 	{ 
-		startup_slot_ = 0;
 		scs_slot_ = 0;
 		cts_slot_ = 0;
 		slots_.fill(nullptr);
+		line_states_.fill(false);
+		active_line_state_ = false;
 	}
 
-	// Set the startup slot 0..4
-	void PakRouter::set_startup_slot(unsigned startup_slot)
+	// Set the active slot 0..4.  This is called via a message from the
+	// MPI when it is active.  It is also used to clear the active_slot
+	// whenever the boot slot (where MPI must live) is empty.
+	void PakRouter::set_active_slot(unsigned active_slot)
 	{
-		startup_slot_ = (startup_slot > 4) ? 0 : startup_slot;
-		DLOG_C("PakRouter::set_startup_slot %d\n",startup_slot_);
+		DLOG_C("PakRouter::set_active_slot %d\n",active_slot);
+		scs_slot_ = active_slot;
+		cts_slot_ = active_slot;
 	}
 
 	// reset() is invoked on hard reset or power up.
 	void PakRouter::reset()
 	{
-		scs_slot_ = cts_slot_ = startup_slot_;
 		DLOG_C("PakRouter::reset\n");
 	}
 
@@ -68,6 +76,35 @@ namespace VCC::Core
 		}
 		DLOG_C("\n");
 	}
+
+	// Callbacks
+	void PakRouter::cart_write_memory(int slot, unsigned char val, unsigned short adr) {
+//DLOG_C("%dw ",slot);
+		MemWrite8(val, adr);
+	};
+
+	unsigned char PakRouter::cart_read_memory(int slot,unsigned short adr){
+//DLOG_C("%dr ",slot);
+		return MemRead8(adr);
+	};
+
+	void PakRouter::cart_assert_line(int slot, bool state){
+		// TODO:  add logic to set state from active cart
+		SetCart(state);
+	};
+
+	void PakRouter::cart_assert_interrupt(int slot, Interrupt intr, InterruptSource src){
+//		DLOG_C("PakRouter interupt slot:%d int:%d\n", slot, intr);
+		(void) src; // not used
+		switch (intr) {
+		case INT_CART:
+			GimeAssertCartInterupt();
+			break;
+		case INT_NMI:
+			CPUAssertInterupt(IS_NMI, INT_NMI);
+			break;
+		}
+	};
 
 	// Horizontal sync
 	void PakRouter::process_horizontal_sync()
@@ -125,6 +162,7 @@ namespace VCC::Core
 	// Write to port
 	void PakRouter::write_port(unsigned char port, unsigned char value)
 	{
+//DLOG_C("pw p:%d v:%d\n",port,value);
 		// Slot-select register (0x7F)
 		if (port == 0x7F) {
 			int scs = value & 3;
@@ -139,7 +177,7 @@ namespace VCC::Core
 			return;
 		}
 		// Broadcast other port writes
-		for (int i = 4; i > 0; i--) {
+		for (int i = 1; i <= 4; i++) {
 			PakRouter::slot_write_port(i, port, value);
 		}
 	}
@@ -147,9 +185,12 @@ namespace VCC::Core
 	// Read port
 	unsigned char PakRouter::read_port(unsigned char port)
 	{
+//DLOG_C("pr p:%d v:%d\n",port);
 		// Slot-select register (0x7F)
 		if (port == 0x7F) {
-			return (cts_slot_ << 4) | scs_slot_;
+			int scs = (scs_slot_ -1) & 3;
+			int cts = (cts_slot_ -1) & 3;
+			return (cts << 4) | scs;
 		}
 		// Disk controller ports (0x40–0x5F) scs slot only
 		if (is_disk_port(port)) {
@@ -160,7 +201,7 @@ namespace VCC::Core
 			return PakRouter::slot_read_port(0, port);
 		}
 		// MPI ports priority scan
-		for (int i = 4; i > 0; i--) {
+		for (int i = 1; i <= 4; i++) {
 			unsigned char data = PakRouter::slot_read_port(i, port);
 			if (data != i) return data;
 		}

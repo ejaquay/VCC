@@ -17,13 +17,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
 
-#include "mc6821.h"
-#include "MachineDefs.h"
-#include "tcc1014registers.h"
-#include "tcc1014mmu.h"
-#include <array>
 #include <vcc/bus/cartridge.h>
-#include <vcc/bus/cpak_cartridge.h>
 
 namespace VCC::Core
 {
@@ -33,38 +27,23 @@ namespace VCC::Core
 		// Constructor
 		PakRouter();
 
-		void set_startup_slot(unsigned startup_slot);
-		void set_slots(std::array<cartridge*, 5> slots);
-
-		// Plugin operations
+		// UI driven router control
 		void reset();
+		void set_slots(std::array<cartridge*, 5> slots);
+		void set_active_slot(unsigned active_slot);
+
+		// Exported plugin cpu loop operations
 		void process_horizontal_sync();
 		void write_port(unsigned char port, unsigned char data);
 		unsigned char read_port(unsigned char port);
 		unsigned char read_memory_byte(unsigned short address);
 		unsigned short sample_audio();
 
-		// Callbacks
-		void cart_write_memory(int slot, unsigned char val, unsigned short adr) {
-			MemWrite8(val, adr);
-		};
-		unsigned char cart_read_memory(int slot,unsigned short adr){
-			return MemRead8(adr);
-		};
-		void cart_assert_line(int slot, bool state){
-			SetCart(state);
-		};
-		void cart_assert_interrupt(int slot, Interrupt intr, InterruptSource src){
-			(void) src; // not used
-			switch (intr) {
-			case INT_CART:
-				GimeAssertCartInterupt();
-				break;
-			case INT_NMI:
-				CPUAssertInterupt(IS_NMI, INT_NMI);
-			break;
-			}
-		};
+		// Plugin cpu loop callbacks
+		void cart_write_memory(int slot, unsigned char val, unsigned short adr);
+		unsigned char cart_read_memory(int slot,unsigned short adr);
+		void cart_assert_line(int slot, bool state);  // see line_states_
+		void cart_assert_interrupt(int slot, Interrupt intr, InterruptSource src);
 
 	private:
 
@@ -77,7 +56,7 @@ namespace VCC::Core
 		// Test for inactive MPI
 		inline bool mpi_not_active() const
 		{
-			return cts_slot_ < 1;
+			return cts_slot_ == 0;
 		}
 
 		// slot hsync 
@@ -121,12 +100,21 @@ namespace VCC::Core
 	private:
 
 		// Cartridge slots: 0 = boot slot, 1..4 = MPI slots
-		std::array<cartridge*, 5> slots_;
+		std::array<cartridge*, 5> slots_{};
 
-		// Startup and current scs and cts slots 0..4
-		int startup_slot_;
-		int scs_slot_;     // disk controller slot
-		int cts_slot_;     // cartridge slot
+		// CTS and SCS slot numbers 0..4
+		// cts_slot_ == 0 implies that the MPI is not active.  When
+		// MPI is active these are one more than actual SCS and CTS
+		int cts_slot_ = 0; // cartridge slot    (cart reads/writes)
+		int scs_slot_ = 0; // spare select slot (disk and line state)
+
+		// Line states per active slot. Select cart (SCS) can change
+		// line state but if SCS changes an assert_cart_line(state)
+		// should be generated for the selected slot if that causes
+		// active_line_state_ to change.
+		std::array<bool,5> line_states_{};
+		bool active_line_state_ = false;
+
 	};
 }
 

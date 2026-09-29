@@ -309,11 +309,14 @@ extern "C"
         const cpak_callbacks* const callbacks)
     {
         gVccWindow = hVccWnd;
-        DLOG_C("SDC %p %p %p %p %p\n",*callbacks);
+        DLOG_C("SDC callbacks write=%p cart=%p read=%p int=%p\n",
+            callbacks->write_memory_byte,
+            callbacks->assert_cartridge_line,
+            callbacks->read_memory_byte,
+            callbacks->assert_interrupt);
         gSlotId = SlotId;
         AssertIntCallback = callbacks->assert_interrupt;
         gpSettings = new VCC::Util::settings(configuration_path);
-        DLOG_C("SDC %p\n",gpSettings);
     }
 
     __declspec(dllexport) const char* PakGetName()

@@ -365,9 +365,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 
 		// Set startup slot from MPI
-		case WM_VCC_SET_START_SLOT: {
+		case WM_VCC_SET_ACTIVE_SLOT: {
 			uint32_t slot = static_cast<uint32_t>(wParam);
-			return SetStartupSlot(slot);
+			return SetActiveSlot(slot);
 		}
 
 		// Unload slot from MPI

@@ -1,4 +1,4 @@
-#define USE_LOGGING
+//#define USE_LOGGING
 ////////////////////////////////////////////////////////////////////////////////
 //	Copyright 2015 by Joseph Forgione
 //	This file is part of VCC (Virtual Color Computer).
@@ -71,8 +71,8 @@ void multipak_cartridge::start()
 	cached_cts_slot_ = switch_slot_;
 	cached_scs_slot_ = switch_slot_;
 
-	// *NEW* Send startup slot to WndProc
-	SendStartSlot(gVccWnd, switch_slot_);
+	// Tell WndPrc what the startup slot is (for pakinterface)
+	SendActiveSlot(gVccWnd, switch_slot_);
 
 	// Mount them
 	for (auto mpi_slot(0u); mpi_slot < slots_.size(); mpi_slot++)
@@ -108,11 +108,15 @@ void multipak_cartridge::reset()
 	switch_slot_ = cached_cts_slot_ = cached_scs_slot_ = mpi_slot;
 	slot_register_ = 0b11001100 | mpi_slot | (mpi_slot << 4);
 
+	// Tell WndPrc what the active slot is now (for pakinterface)
+	SendActiveSlot(gVccWnd, switch_slot_);
+
 	for (const auto& cartridge_slot : slots_)
 	{
 		cartridge_slot.reset();
 	}
 
+	DLOG_C("MPI assert_cartridge_line reset\n");
 	callbacks_->assert_cartridge_line(slots_[cached_scs_slot_].line_state());
 }
 
@@ -139,6 +143,8 @@ void multipak_cartridge::write_port(unsigned char port_id, unsigned char value)
 		cached_cts_slot_ = (value >> 4) & 3;
 		slot_register_ = value;
 
+		DLOG_C("MPI assert_cartridge_line write select scs:%d cts:%d state:%d\n",
+				cached_scs_slot_,cached_cts_slot_,slots_[cached_scs_slot_].line_state());
 		callbacks_->assert_cartridge_line(slots_[cached_scs_slot_].line_state());
 
 		return;
@@ -350,7 +356,7 @@ void multipak_cartridge::eject_cartridge(slot_id_type mpi_slot)
 	slots_[mpi_slot] = {};
 
 	if (mpi_slot == cached_cts_slot_ || mpi_slot == switch_slot_)
-		SendStartSlot(gVccWnd, 0);
+		SendActiveSlot(gVccWnd, 0);  // Active slot ejected
 		SendHardReset(gVccWnd);
 
 	DLOG_C("MPI eject_cartridge sending slot %d unload\n",mpi_slot+1);
@@ -460,7 +466,7 @@ multipak_cartridge::slot_id_type multipak_cartridge::selected_scs_slot() const
 
 void multipak_cartridge::assert_cartridge_line(slot_id_type mpi_slot, bool line_state)
 {
-	DLOG_C("MPI assert_cartridge_line cart: %d state: %d scs: %d\n",
+	DLOG_C("MPI assert_cartridge_line thunk\n",
 			mpi_slot,line_state,selected_scs_slot());
 
 	VCC::Util::section_locker lock(mutex_);
