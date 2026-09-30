@@ -37,22 +37,19 @@
 namespace VCC::Core
 {
 	PakRouter::PakRouter()
-	{ 
-		scs_slot_ = 0;
-		cts_slot_ = 0;
+	{
+		disk_slot_ = 0;
+		active_slot_ = 0;
 		slots_.fill(nullptr);
 		line_states_.fill(false);
-		active_line_state_ = false;
 	}
 
-	// Set the active slot 0..4.  This is called via a message from the
-	// MPI when it is active.  It is also used to clear the active_slot
-	// whenever the boot slot (where MPI must live) is empty.
+	// Set the active slot 0..4. This is called from an MPI message.
 	void PakRouter::set_active_slot(unsigned active_slot)
 	{
 		DLOG_C("PakRouter::set_active_slot %d\n",active_slot);
-		scs_slot_ = active_slot;
-		cts_slot_ = active_slot;
+		disk_slot_ = active_slot;
+		active_slot_ = active_slot;
 	}
 
 	// reset() is invoked on hard reset or power up.
@@ -69,9 +66,9 @@ namespace VCC::Core
 		for (int i = 0; i <= 4; ++i) {
         	slots_[i] = slots[i];
     		DLOG_C(" %d:%s",i,slots_[i]->name().c_str());
-			if (i == cts_slot_)
+			if (i == active_slot_)
 				DLOG_C("*");
-			else if (i == scs_slot_)
+			else if (i == disk_slot_)
 				DLOG_C("~");
 		}
 		DLOG_C("\n");
@@ -119,7 +116,7 @@ namespace VCC::Core
 	{
 		// Cartridge audio is two packed unsigned 8-bit channels. Audio-producing
 		// cartridges use 0x80 as the midpoint level, while cartridges without
-		// PakSampleAudio return 0 through the compatibility shim. The old code 
+		// PakSampleAudio return 0 through the compatibility shim. The old code
 		// added complete 16-bit packed samples, which allowed the right channel
 		// to carry into the left channel and made two 0x8080 midpoint samples wrap to
 		// 0x0100. Mix the channels independently around 0x80 instead.
@@ -153,7 +150,7 @@ namespace VCC::Core
 	// Cart memory reads only from CTS slot
 	unsigned char PakRouter::read_memory_byte(unsigned short address)
 	{
-		return PakRouter::slot_read_memory(cts_slot_,address);
+		return PakRouter::slot_read_memory(active_slot_,address);
 	}
 
 	// Write to port
@@ -171,13 +168,13 @@ namespace VCC::Core
 		if (port == 0x7F) {
 			int scs = value & 3;
 			int cts = (value >> 4) & 3;
-			scs_slot_ = scs + 1;
-			cts_slot_ = cts + 1;
+			disk_slot_ = scs + 1;
+			active_slot_ = cts + 1;
 			return;
 		}
 		// Disk controller ports (0x40–0x5F) scs slot only
 		if (is_disk_port(port)) {
-			PakRouter::slot_write_port(scs_slot_, port, value);
+			PakRouter::slot_write_port(disk_slot_, port, value);
 			return;
 		}
 		// Broadcast other port writes
@@ -198,13 +195,13 @@ namespace VCC::Core
 
 		// Slot-select register (0x7F)
 		if (port == 0x7F) {
-			int scs = (scs_slot_ -1) & 3;
-			int cts = (cts_slot_ -1) & 3;
+			int scs = (disk_slot_ -1) & 3;
+			int cts = (active_slot_ -1) & 3;
 			return (cts << 4) | scs;
 		}
 		// Disk controller ports (0x40–0x5F) scs slot only
 		if (is_disk_port(port)) {
-			return PakRouter::slot_read_port(scs_slot_, port);
+			return PakRouter::slot_read_port(disk_slot_, port);
 		}
 		// No MPI slot zero only
 		if (mpi_not_active()) {
@@ -230,7 +227,7 @@ namespace VCC::Core
 			}
 			return;
 		}
-		snprintf(txt,len,"MPI:%d,%d",cts_slot_,scs_slot_);
+		snprintf(txt,len,"MPI:%d,%d",active_slot_,disk_slot_);
 		for (unsigned int i=1; i<=4; i++)
 		{
 			char tmp[64]{};

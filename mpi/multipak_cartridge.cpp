@@ -305,8 +305,8 @@ void multipak_cartridge::menu_item_clicked(unsigned char menu_item_id)
 	}
 }
 
-// returns menu item from DLL item list
 bool multipak_cartridge::get_menu_item(menu_item_entry* item, size_t index)
+// This do not need to be witih a cart object
 {
 	using VCC::Bus::gDllCartMenu;
 
@@ -318,20 +318,20 @@ bool multipak_cartridge::get_menu_item(menu_item_entry* item, size_t index)
 		gDllCartMenu.clear();
 		gDllCartMenu.add("", 0, MIT_Seperator);
 		gDllCartMenu.add("MPI Config", ControlId(19), MIT_StandAlone);
-		// Append child menus
-		for (int SlotId = 4; SlotId > 0; SlotId--) {
-			menu_item_entry pakitm;
-			for (int ndx = 0; ndx < MAX_MENU_ITEMS; ndx++) {
-				if (slots_[SlotId-1].get_menu_item(&pakitm,ndx)) {
-					// bias control_ids per slot
-					if (pakitm.menu_id >= MID_CONTROL)
-						pakitm.menu_id += (SlotId * 50);
-					gDllCartMenu.add(pakitm.name,pakitm.menu_id,pakitm.type);
-				} else {
-					break;
-				}
-			}
-		}
+//		// Append child menus
+//		for (int SlotId = 4; SlotId > 0; SlotId--) {
+//			menu_item_entry pakitm;
+//			for (int ndx = 0; ndx < MAX_MENU_ITEMS; ndx++) {
+//				if (slots_[SlotId-1].get_menu_item(&pakitm,ndx)) {
+//					// bias control_ids per slot
+//					if (pakitm.menu_id >= MID_CONTROL)
+//						pakitm.menu_id += (SlotId * 50);
+//					gDllCartMenu.add(pakitm.name,pakitm.menu_id,pakitm.type);
+//				} else {
+//					break;
+//				}
+//			}
+//		}
 	}
 	return gDllCartMenu.copy_item( *item, index);
 }

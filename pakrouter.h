@@ -1,17 +1,17 @@
 ////////////////////////////////////////////////////////////////////////////////
 //	Copyright 2015 by Joseph Forgione
 //	This file is part of VCC (Virtual Color Computer).
-//	
+//
 //	VCC (Virtual Color Computer) is free software: you can redistribute itand/or
 //	modify it under the terms of the GNU General Public License as published by
 //	the Free Software Foundation, either version 3 of the License, or (at your
 //	option) any later version.
-//	
+//
 //	VCC (Virtual Color Computer) is distributed in the hope that it will be
 //	useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
 //	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
 //	Public License for more details.
-//	
+//
 //	You should have received a copy of the GNU General Public License along with
 //	VCC (Virtual Color Computer). If not, see <http://www.gnu.org/licenses/>.
 ////////////////////////////////////////////////////////////////////////////////
@@ -52,14 +52,14 @@ namespace VCC::Core
 
 		// Test if a disk port
 		inline bool is_disk_port(int port)
-		{ 
+		{
 			return port >= 0x40 && port <= 0x5F;
 		}
 
 		// Test for inactive MPI
 		inline bool mpi_not_active() const
 		{
-			return cts_slot_ == 0;
+			return active_slot_ == 0;
 		}
 
 		// Get plugin status text
@@ -69,14 +69,14 @@ namespace VCC::Core
 				cart->status(buf,len);
 		}
 
-		// slot hsync 
+		// slot hsync
 		inline void slot_process_hsync(int slot)
 		{
 			if (auto* cart = slots_[slot])
         		cart->process_horizontal_sync();
 		}
 
-		// get audio sample from slot 
+		// get audio sample from slot
 		inline int slot_sample_audio(int slot)
 		{
 			if (auto* cart = slots_[slot])
@@ -109,21 +109,25 @@ namespace VCC::Core
 
 	private:
 
-		// Cartridge slots: 0 = boot slot, 1..4 = MPI slots
+		// Plugin slots are numbered 1 through 4.
+		// Slots 0 = boot slot, 1..4 = MPI slots
 		std::array<cartridge*, 5> slots_{};
 
-		// CTS and SCS slot numbers 0..4
-		// cts_slot_ == 0 implies that the MPI is not active.  When
-		// MPI is active these are one more than actual SCS and CTS
-		int cts_slot_ = 0; // cartridge slot    (cart reads/writes)
-		int scs_slot_ = 0; // spare select slot (disk and line state)
+		// active_slot_ refers to the slot which exposes ROM to
+		// the cpu. If non-zero it indicates a multipak is present
+		// and which slot CTS points to.
+		int active_slot_ = 0; // (CTS cart pin 32)
 
-		// Line states per active slot. Select cart (SCS) can change
-		// line state but if SCS changes an assert_cart_line(state)
-		// should be generated for the selected slot if that causes
-		// active_line_state_ to change.
-		std::array<bool,5> line_states_{};
-		bool active_line_state_ = false;
+		// disk_slot_ refers to the slot that can interact with disk
+		// ports and which slot controls line state (CART signal)
+		int disk_slot_ = 0;   // (SCS cart pin 36)
+
+		// Plugins can the cart line to trigger an IRQ. They use a callback
+		// to set the control line. The router stores the value in the line
+		// state array and forwards it to gime code which detects any change.
+		// Additionally anytime SCS is changed the router forwards the value
+		// saved for the SCS slot.
+		std::array<bool,5> line_states_{}; // Per slot line state (CART pin 8)
 
 	};
 }

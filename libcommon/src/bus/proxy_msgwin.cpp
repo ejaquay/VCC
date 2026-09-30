@@ -27,7 +27,7 @@ namespace VCC::Core
 	const char PROXY_CLASS[] = "ProxyMessageWindow";
 
 //------------------------------------------------------------------------------
-// Private message handler forwards messages defined in cartridge_messages.h 
+// Private message handler forwards messages defined in cartridge_messages.h
 //------------------------------------------------------------------------------
 
 	LRESULT CALLBACK ProxyMsgWin::ProxyProc(

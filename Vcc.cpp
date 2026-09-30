@@ -395,14 +395,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			wmId    = LOWORD(wParam);
 			wmEvent = HIWORD(wParam);
 
-			// Parse the menu selections:
-
-			// Check if ID is in cartridge menu range. Control ID's are
-			// biased by SlotNum, there are five slots each gets 50
-			if ( (wmId >= MID_CONTROL) & (wmId < MID_CONTROL + 250) )
-			{
-				CartMenuActivated(wmId-MID_CONTROL);
-				break;
+			// Activate plugin menu if wmID is in plugin menu range
+			if ( (wmId >= MID_CONTROL) && (wmId < MID_CONTROL + 250) ) {
+				auto MenuID = wmId - MID_CONTROL;
+				CartMenuActivated(MenuID);
+				return 0;
 			}
 
 			switch (wmId)
@@ -492,7 +489,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				case ID_SWAP_JOYSTICKS:
 					SwapJoySticks();
 					break;
-
 
 				case ID_PAUSE_EMULATION:
 					EmuState.Debugger.ToggleRun();

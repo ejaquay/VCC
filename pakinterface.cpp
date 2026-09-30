@@ -150,11 +150,19 @@ unsigned short PackAudioSample()
 	return gPakRouter.sample_audio();
 }
 
+void PakAssertLine(bool val){
+	//FIME: what goes here?
+}
+
 //--------------------------------------------------------
 // Convert PAK interrupt assert to CPU assert or Gime assert.
 //--------------------------------------------------------
 void PakAssertInterupt(Interrupt interrupt, InterruptSource source)
 {
+	// FIXME: GimeAssertCartInterupt() should be from assert line
+	// but plugin and Gime interrupt code would need to be fixed
+	// to be level based first...
+
 	(void) source; // not used
 
 	switch (interrupt) {
@@ -168,34 +176,42 @@ void PakAssertInterupt(Interrupt interrupt, InterruptSource source)
 }
 
 //--------------------------------------------------------
-// Build entries for boot slot menu.
+// Build Plugin dynamic menus
 //--------------------------------------------------------
 void BuildCartMenu()
 {
 	//VCC::Util::section_locker lock(gPakMutex);
 	using VCC::Bus::gVccCartMenu;
 	gVccCartMenu.clear();
-	if (!gCartSlots[0]->name().empty()) {
-		std::string tmp = "&Eject " + gCartSlots[0]->name();
-		gVccCartMenu.add(tmp, ControlId(2), MIT_StandAlone);
-		// Add items from loaded plugin
-		menu_item_entry item;
-		for (size_t index=0;index<MAX_MENU_ITEMS;index++) {
-			if (gCartSlots[0]->get_menu_item(&item,index)) {
-				gVccCartMenu.add(item.name,item.menu_id,item.type);
-			} else {
-				break;
-			}
-		}
-	} else {
+
+	if (gCartSlots[0]->name().empty()) {
+		// Items to load the boot slot
 		gVccCartMenu.add("Load &MPI", ControlId(3), MIT_StandAlone);
 		gVccCartMenu.add("Load &DLL", ControlId(1), MIT_StandAlone);
 		gVccCartMenu.add("Load &ROM", ControlId(4), MIT_StandAlone);
+	} else {
+		// Items to remove boot slot.
+		std::string tmp = "&Eject " + gCartSlots[0]->name();
+		gVccCartMenu.add(tmp, ControlId(2), MIT_StandAlone);
+
+		// Items from loaded plugins
+		for (int slot : {0, 4, 3, 2, 1}) {
+			auto* cart = gCartSlots[slot].get();
+			if (!cart) continue;
+			for (int ndx = 0; ndx < MAX_MENU_ITEMS; ndx++) {
+				menu_item_entry item;
+				if (!cart->get_menu_item(&item, ndx)) break;
+				// Bias menu id's for slot location
+				if (item.menu_id >= MID_CONTROL)
+					item.menu_id += (slot * 50);
+				gVccCartMenu.add(item.name,item.menu_id,item.type);
+			}
+		}
 	}
 }
 
 //--------------------------------------------------------
-// Boot slot dynamic menu
+// Dialog for loading boot slot plugin
 //--------------------------------------------------------
 void PakLoadCartridgeUI(int type)
 {
@@ -233,7 +249,7 @@ void PakLoadCartridgeUI(int type)
 }
 
 //--------------------------------------------------------
-// Load plugin
+// Load boot plugin
 //--------------------------------------------------------
 cartridge_loader_status PakLoadCartridge(const char* filename)
 {
@@ -331,7 +347,7 @@ static cartridge_loader_status LoadCartridge(int slot, const char *filename)
     //DLOG_C("pakinterface load slot %d %s cb: w=%p l=%p r=%p i=%p\n",
 	//	slot, filename,
 	//	slot_callbacks.write_memory_byte,
-    //	slot_callbacks.assert_cartridge_line,
+    //	slot_callbacks.ssert_cartridge_line,
     //	slot_callbacks.read_memory_byte,
     //	slot_callbacks.assert_interrupt);
 
@@ -403,10 +419,13 @@ void LoadPack(int type) {
 }
 
 //--------------------------------------------------------
-// CartMenuActivated is called from VCC main when a cartridge menu item is clicked.
+// CartMenuActivated is called from VCC WndPrc when a cartridge
+// menu item is clicked. MenuID is unsigned value less that 250
 //--------------------------------------------------------
 void CartMenuActivated(unsigned int MenuID)
 {
+	if (MenuID >= 250) return;
+
 	switch (MenuID)
 	{
 	case 1:
@@ -438,11 +457,9 @@ void CartMenuActivated(unsigned int MenuID)
 
 	// menu_item_clicked takes unsigned char. This limits total number of menu items
 	// to 255. 50 are allocated to host cart and 50 each to mpi carts for 250 total.
-	// This should be more than enough for future needs.
 
-	unsigned char menu_item = MenuID & 0xFF;
 	//gActiveCartrige->menu_item_clicked(menu_item);
-	gCartSlots[0]->menu_item_clicked(menu_item);
+	gCartSlots[0]->menu_item_clicked(MenuID);
 }
 
 //--------------------------------------------------------------
