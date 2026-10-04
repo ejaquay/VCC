@@ -143,7 +143,7 @@ void multipak_cartridge::write_port(unsigned char port_id, unsigned char value)
 		cached_cts_slot_ = (value >> 4) & 3;
 		slot_register_ = value;
 
-		DLOG_C("MPI assert_cartridge_line write select scs:%d cts:%d state:%d\n",
+		DLOG_C("MPI write select port scs:%d cts:%d state:%d\n",
 				cached_scs_slot_,cached_cts_slot_,slots_[cached_scs_slot_].line_state());
 		callbacks_->assert_cartridge_line(slots_[cached_scs_slot_].line_state());
 
@@ -379,6 +379,7 @@ void multipak_cartridge::eject_cartridge(slot_id_type mpi_slot)
 multipak_cartridge::mount_status_type multipak_cartridge::mount_cartridge(
 	slot_id_type mpi_slot, const path_type& filename)
 {
+
 	// Capture pointer to multipak_cartridge
 	static multipak_cartridge* self = nullptr;
 	self = this;

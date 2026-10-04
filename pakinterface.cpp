@@ -70,16 +70,13 @@ static std::array<plugin_handle, NumCartSlots> gCartHandles{};
 static VCC::Core::PakRouter gPakRouter;
 
 void UnloadCartridge(int slot);
-static cartridge_loader_status LoadCartridge(int slot, const char *filename);
+static cartridge_loader_status load_any_cartridge(int slot, const char *filename);
 
 //==========================================================================
 
 //--------------------------------------------------------
 // Slot callback implimenters
 //--------------------------------------------------------
-
-// The same call back table is passed to all cart plugins.
-// The pakrouter decides implementation based on slot used
 
 static void write_memory_byte_impl(size_t slot, unsigned char val, unsigned short adr) {
 	gPakRouter.cart_write_memory(slot, val, adr);
@@ -98,6 +95,61 @@ struct cpak_callbacks slot_callbacks = {
 	assert_cart_line_impl,
 	write_memory_byte_impl,
 	read_memory_byte_impl
+};
+
+//----------------------------------------------------------
+// Slot adapters
+//
+//FIXME slot adapters only exist to satisfy cart definitions,
+// they have no real purpose. Cart defintions and loader needs
+// to be redefined so these can be eliminated.
+//----------------------------------------------------------
+
+struct multi_slot_adapter : public VCC::Core::cartridge_callbacks
+{
+    multi_slot_adapter(
+        size_t slot,
+        const cpak_callbacks& callbacks)
+        : slot_(slot),
+          callbacks_(callbacks)
+    {}
+    path_type configuration_path() const override {
+        return {}; // Carts do NOT modify ini paths!!!
+    }
+    void write_memory_byte(unsigned char value, unsigned short address) override {
+        callbacks_.write_memory_byte(slot_, value, address);
+    }
+    unsigned char read_memory_byte(unsigned short address) override {
+        return callbacks_.read_memory_byte(slot_, address);
+    }
+    void assert_cartridge_line(bool state) override {
+       callbacks_.assert_cartridge_line(slot_, state);
+    }
+    void assert_interrupt(Interrupt intr, InterruptSource src) override {
+        callbacks_.assert_interrupt(slot_, intr, src);
+    }
+private:
+    size_t slot_;
+    const cpak_callbacks& callbacks_;
+};
+
+struct boot_slot_adapter : public ::VCC::Core::cartridge_callbacks
+{
+    path_type configuration_path() const override {
+        return {}; // Carts do NOT modify ini paths!!!
+    }
+    void write_memory_byte(unsigned char value, unsigned short address) override {
+        MemWrite8(value, address);
+    }
+    unsigned char read_memory_byte(unsigned short address) override {
+        return MemRead8(address);
+    }
+    void assert_cartridge_line(bool line_state) override {
+        SetCart(line_state);
+    }
+    void assert_interrupt(Interrupt interrupt, InterruptSource interrupt_source) override {
+        PakAssertInterupt(interrupt, interrupt_source);
+    }
 };
 
 //--------------------------------------------------------
@@ -213,7 +265,7 @@ void BuildCartMenu()
 //--------------------------------------------------------
 // Dialog for loading boot slot plugin
 //--------------------------------------------------------
-void PakLoadCartridgeUI(int type)
+void LoadCartridgeDialog(int type)
 {
 	char inifile[MAX_PATH];
 	GetIniFilePath(inifile);
@@ -249,8 +301,9 @@ void PakLoadCartridgeUI(int type)
 }
 
 //--------------------------------------------------------
-// Load boot plugin
+// Load cartridge to boot slot
 //--------------------------------------------------------
+
 cartridge_loader_status PakLoadCartridge(const char* filename)
 {
 	static const std::map<cartridge_loader_status, UINT> string_id_map = {
@@ -262,7 +315,7 @@ cartridge_loader_status PakLoadCartridge(const char* filename)
 		{ cartridge_loader_status::not_expansion, IDS_MODULE_NOT_EXPANSION }
 	};
 
-	const auto result(LoadCartridge(0, filename));
+	const auto result(load_any_cartridge(0, filename));
 	if (result == cartridge_loader_status::success)
 	{
 		Setting().write("Module", "OnBoot", filename);
@@ -322,7 +375,8 @@ void UnloadDll()
 //--------------------------------------------------------
 // Load cartridge to slot
 //--------------------------------------------------------
-static cartridge_loader_status LoadCartridge(int slot, const char *filename)
+
+static cartridge_loader_status load_any_cartridge(int slot, const char *filename)
 {
 	slot_id_type SlotId = slot;
 
@@ -330,26 +384,27 @@ static cartridge_loader_status LoadCartridge(int slot, const char *filename)
 	char iniPath[MAX_PATH]="";
 	GetIniFilePath(iniPath);
 
+	// FIXME:  Adapters are not necessary and shold be elminiated
+	std::unique_ptr<VCC::Core::cartridge_callbacks> adapter;
+	if (SlotId == 0) {
+		adapter = std::make_unique<boot_slot_adapter>();
+	} else { 
+		adapter = std::make_unique<multi_slot_adapter>(SlotId -1, slot_callbacks);
+	}
+
 	// Load the cartridge
 	auto loadedCartridge = VCC::Core::load_cartridge(
 		filename,
-		nullptr,
+		std::move(adapter),   // FIXME remove this (requires router and cart def work)
 		SlotId,
 		iniPath,
 		EmuState.hMsgProxy,
 		slot_callbacks);
 
 	if (loadedCartridge.load_result != cartridge_loader_status::success) {
-		DLOG_C("pakinterface LoadCartridge slot %d %s failed\n", slot, filename);
+		DLOG_C("pakinterface load_any_cartridge slot %d %s failed\n", slot, filename);
 		return loadedCartridge.load_result;
 	}
-
-    //DLOG_C("pakinterface load slot %d %s cb: w=%p l=%p r=%p i=%p\n",
-	//	slot, filename,
-	//	slot_callbacks.write_memory_byte,
-    //	slot_callbacks.ssert_cartridge_line,
-    //	slot_callbacks.read_memory_byte,
-    //	slot_callbacks.assert_interrupt);
 
 	// Unload current cart in slot (could be the empty cartridge)
 	UnloadCartridge(slot);
@@ -361,18 +416,18 @@ static cartridge_loader_status LoadCartridge(int slot, const char *filename)
 	gCartHandles[slot] = std::move(loadedCartridge.handle);
 
 	if (slot == 0) {
+		DLOG_C("\npakinterface initialize boot slot\n",);
 		// Initialize the cartridge, if it is MPI it will update the startup slot
 		gCartSlots[0]->start();
 		gPakRouter.reset();
 		EmuState.ResetPending = 2;
 		SendMessage(EmuState.WindowHandle,WM_VCC_UPD_MENU,(WPARAM) 0,(LPARAM) 0);
 	} else {
-		// TODO:  Initialize the cartridge. Does this cause a reload? (later)
-		DLOG_C("pakinterface initialize cart slot %d\n\n",slot);
+		DLOG_C("\npakinterface initialize cart slot %d\n",slot);
 		gCartSlots[slot]->start();
 	}
 
-	// Update router slot list.
+	// Update router slot list.  TODO:  Do this sooner??
 	UpdateRouterSlots();
 
 	// TODO: update menus or reset if slot active (later)
@@ -410,10 +465,10 @@ void UnloadPack()
 }
 
 //--------------------------------------------------------
-// load bootslot
+// load bootslot.  type: 0 program cartridge 1 rom cartridge
 //--------------------------------------------------------
 void LoadPack(int type) {
-	PakLoadCartridgeUI(type);
+	LoadCartridgeDialog(type);
 	gPakRouter.set_active_slot(0);
 	EmuState.ResetPending=2;
 }
@@ -517,7 +572,7 @@ bool LoadSlot(unsigned int slot, const PluginMsgData * data)
 
 	// TODO remove ignore check after parallel testing completes
 	gIgnoreNextDuplicateCheck = true;
-	LoadCartridge(slot, data->pluginPath);
+	load_any_cartridge(slot, data->pluginPath);
 	return true;
 }
 
