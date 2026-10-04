@@ -62,7 +62,7 @@ static std::array<plugin_ptr, NumCartSlots> gCartSlots{
 	std::make_unique<VCC::Core::null_cartridge>()
 };
 
-// Multi cart unloader and loader manages carts in slot 0-4
+// Multi cart unloader and loader manages carts in slot 1-4
 using plugin_handle = cartridge_loader_result::handle_type;
 static std::array<plugin_handle, NumCartSlots> gCartHandles{};
 
@@ -75,7 +75,7 @@ static cartridge_loader_status load_any_cartridge(int slot, const char *filename
 //==========================================================================
 
 //--------------------------------------------------------
-// Slot callback implimenters
+// Plugin callbacks
 //--------------------------------------------------------
 
 static void write_memory_byte_impl(size_t slot, unsigned char val, unsigned short adr) {

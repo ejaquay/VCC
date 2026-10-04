@@ -50,6 +50,7 @@ namespace VCC::Core
 		DLOG_C("PakRouter::set_active_slot %d\n",active_slot);
 		disk_slot_ = active_slot;
 		active_slot_ = active_slot;
+		SetCart(line_states_[active_slot]);
 	}
 
 	// reset() is invoked on hard reset or power up.
@@ -74,7 +75,9 @@ namespace VCC::Core
 		DLOG_C("\n");
 	}
 
+	//-------------------
 	// Callbacks
+	//-------------------
 	void PakRouter::cart_write_memory(int slot, unsigned char val, unsigned short adr) {
 		MemWrite8(val, adr);
 	};
@@ -84,8 +87,8 @@ namespace VCC::Core
 	};
 
 	void PakRouter::cart_assert_line(int slot, bool state){
-		// TODO:  add logic to set state from active cart
-		SetCart(state);
+		line_states_[slot] = state;
+		SetCart(line_states_[active_slot_]);
 	};
 
 	void PakRouter::cart_assert_interrupt(int slot, Interrupt intr, InterruptSource src){
@@ -100,7 +103,10 @@ namespace VCC::Core
 		}
 	};
 
-	// Horizontal sync
+	//-------------------
+	// Routed plugin calls
+	//-------------------
+
 	void PakRouter::process_horizontal_sync()
 	{
 		if (mpi_not_active()) {
@@ -111,7 +117,6 @@ namespace VCC::Core
 			slot_process_hsync(i);
 	}
 
-	// Sample audio
 	unsigned short PakRouter::sample_audio()
 	{
 		// Cartridge audio is two packed unsigned 8-bit channels. Audio-producing
@@ -147,13 +152,12 @@ namespace VCC::Core
 		return right + (left << 8);
 	}
 
-	// Cart memory reads only from CTS slot
 	unsigned char PakRouter::read_memory_byte(unsigned short address)
 	{
+		// Read only active slot memory
 		return PakRouter::slot_read_memory(active_slot_,address);
 	}
 
-	// Write to port
 	void PakRouter::write_port(unsigned char port, unsigned char value)
 	{
 		// No mpi just write the port. For sure we don't want to
@@ -183,7 +187,6 @@ namespace VCC::Core
 		}
 	}
 
-	// Read port
 	unsigned char PakRouter::read_port(unsigned char port)
 	{
 		// No mpi just return what ever the port says
@@ -215,7 +218,6 @@ namespace VCC::Core
 		return 0;
 	}
 
-	// Get plugins status line
 	void PakRouter::plugin_status(char * txt, size_t len)
 	{
 		if (mpi_not_active()) {
