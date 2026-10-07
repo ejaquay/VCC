@@ -16,19 +16,47 @@
 //	VCC (Virtual Color Computer). If not, see <http://www.gnu.org/licenses/>.
 ////////////////////////////////////////////////////////////////////////////////
 
-
-// Windows messages sent to VCC main message loop
-// Be sure to add these to proxy_msgwin for DLL's
+//----------------------------------------------------
+// Defines messages sent to VCC WndProc from cart DLL's
+//----------------------------------------------------
 
 #pragma once
 #include <windows.h>
 #include <cstdint>
 
-// Structure for transmitting plugin data across DLL boundaries
-struct PluginMsgData {
-	uint32_t size;              // Size of data
-	char pluginPath[MAX_PATH];  // Plugin filename
+//----------------------------------------------------
+// Structures for moving data across DLL boundaries
+// These require a fixed size buffer to contain the data
+// buffer must be an array of atomic C types
+// size is the size of the data buffer.
+//----------------------------------------------------
+
+struct CartLoadRequest {
+	const uint32_t size;
+	char pluginPath[MAX_PATH];
+	CartLoadRequest() noexcept
+		: size(MAX_PATH), pluginPath{} {}
 };
+
+struct CartNameReply {
+	static constexpr uint32_t BUFSIZE = 128;
+    const uint32_t size;
+    char name[BUFSIZE];
+	CartNameReply() noexcept
+		: size(BUFSIZE), name{} {}
+};
+
+struct CartDescReply {
+	static constexpr uint32_t BUFSIZE = 512;
+    const uint32_t size;
+    char description[BUFSIZE];
+	CartDescReply() noexcept
+		: size(BUFSIZE), description{} {}
+};
+
+//----------------------------------------------------
+// DLL <-> VCC Messages and helpers
+//----------------------------------------------------
 
 // Hard Reset (any plugin)
 inline constexpr uint32_t WM_VCC_CPU_RESET = WM_APP + 101;
@@ -48,26 +76,48 @@ inline LRESULT SendSoftReset(HWND hwnd) {
 	return SendMessage(hwnd,WM_VCC_SOFT_RESET, 0, 0);
 }
 
-// Set active slot (from MMI)
+// Set active slot (MPI)
 inline constexpr uint32_t WM_VCC_SET_ACTIVE_SLOT = WM_APP + 104;
 inline LRESULT SendActiveSlot(HWND hwnd, uint32_t slotnum) {
 	return SendMessage(hwnd,WM_VCC_SET_ACTIVE_SLOT, slotnum, 0);
 }
 
-// Unload slot (from MMI)
+// Unload slot request (MPI)
 inline constexpr uint32_t WM_VCC_UNLOAD_SLOT = WM_APP + 105;
 inline LRESULT SendUnloadSlot(HWND hwnd, uint32_t slotnum) {
 	return SendMessage(hwnd,WM_VCC_UNLOAD_SLOT, slotnum, 0);
 }
 
-// Load cartridge plugin (from MMI)
-inline constexpr uint32_t WM_VCC_LOAD_SLOT =  WM_APP + 106;
-inline LRESULT SendLoadSlot(HWND hwnd, uint32_t slotnum, const PluginMsgData& pluginData) {
+// Load slot request (MPI)
+inline constexpr uint32_t WM_VCC_LOAD_SLOT = WM_APP + 106;
+inline LRESULT SendLoadSlot(HWND hwnd, uint32_t slot, CartLoadRequest& req) {
 	return SendMessage(
-	hwnd,
-	WM_VCC_LOAD_SLOT,
-	static_cast<WPARAM>(slotnum),
-	reinterpret_cast<LPARAM>(&pluginData)
+		hwnd,
+		WM_VCC_LOAD_SLOT,
+		static_cast<WPARAM>(slot),
+		reinterpret_cast<LPARAM>(&req)
+	);
+}
+
+// Request name of cartridge in slot (MPI)
+inline constexpr uint32_t WM_VCC_GET_CART_NAME = WM_APP + 107;
+inline LRESULT GetCartName(HWND hwnd, uint32_t slot, CartNameReply& rpy) {
+	return SendMessage(
+		hwnd,
+		WM_VCC_GET_CART_NAME,
+		static_cast<WPARAM>(slot),
+		reinterpret_cast<LPARAM>(&rpy)
+	);
+}
+
+// Request desription of cartridge in slot (MPI)
+inline constexpr uint32_t WM_VCC_GET_CART_DESCRIPT = WM_APP + 108;
+inline LRESULT GetCartDesc(HWND hwnd, uint32_t slot, CartDescReply& rpy) {
+	return SendMessage(
+		hwnd,
+		WM_VCC_GET_CART_DESCRIPT,
+		static_cast<WPARAM>(slot),
+		reinterpret_cast<LPARAM>(&rpy)
 	);
 }
 

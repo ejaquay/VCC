@@ -33,18 +33,11 @@
 // An array of pointers to installed plugin objects is used. The array
 // contains five slots, 0 = boot slot, 1..4 are MPI slots, if present.
 // binary calls are routed to/from either boot slot or the MPI slots.
+// Correct active slot, cts, and scs information is essential for routing.
 
 namespace VCC::Core
 {
-	PakRouter::PakRouter()
-	{
-		disk_slot_ = 0;
-		active_slot_ = 0;
-		slots_.fill(nullptr);
-		line_states_.fill(false);
-	}
-
-	// Set the active slot 0..4. This is called from an MPI message.
+	// Set the active slot 0..4  Usually from MPI message.
 	void PakRouter::set_active_slot(unsigned active_slot)
 	{
 		DLOG_C("PakRouter::set_active_slot %d\n",active_slot);
@@ -57,45 +50,54 @@ namespace VCC::Core
 	void PakRouter::reset()
 	{
 		DLOG_C("PakRouter::reset\n");
+		for (int i = 0; i <= 4; i++)
+			slot_reset(i);
 	}
 
-	// Set plugin pointer array. This is called anytime a plugin is updated.
-	// Take care to not change plugin in an active slot (cts,scs)
-	void PakRouter::set_slots(std::array<cartridge*, 5> slots)
-	{
-		DLOG_C("PakRouter::set_slots");
-		for (int i = 0; i <= 4; ++i) {
-        	slots_[i] = slots[i];
-    		DLOG_C(" %d:%s",i,slots_[i]->name().c_str());
-			if (i == active_slot_)
-				DLOG_C("*");
-			else if (i == disk_slot_)
-				DLOG_C("~");
-		}
-		DLOG_C("\n");
+	// Process external menu item clicks
+	void PakRouter::menu_item_clicked(unsigned int menu_item) {
+		DLOG_C("PakRouter::menu_item_clicked %d %d %d\n",menu_item);
+		// Each slot is allocated 50 menu items
+		int item = menu_item % 50;
+		int slot = menu_item / 50;
+		if (auto& cart = slots_[slot])
+			cart->menu_item_clicked(item);
 	}
 
 	//-------------------
 	// Callbacks
 	//-------------------
-	void PakRouter::cart_write_memory(int slot, unsigned char val, unsigned short adr) {
+	void PakRouter::cart_write_memory(int slot, unsigned char val, unsigned short adr)
+	{
 		MemWrite8(val, adr);
 	};
 
-	unsigned char PakRouter::cart_read_memory(int slot,unsigned short adr){
+	unsigned char PakRouter::cart_read_memory(int slot,unsigned short adr)
+	{
 		return MemRead8(adr);
 	};
 
-	void PakRouter::cart_assert_line(int slot, bool state){
+	void PakRouter::cart_assert_line(int slot, bool state)
+	{
 		line_states_[slot] = state;
 		SetCart(line_states_[active_slot_]);
 	};
 
-	void PakRouter::cart_assert_interrupt(int slot, Interrupt intr, InterruptSource src){
-		(void) src; // not used
+	void PakRouter::cart_assert_interrupt(int slot, Interrupt intr, InterruptSource src)
+	{
+		// TODO: Filter on SCS
+
+		(void) src; // not used, might be needed for state someday...
+
+		//----------------------------------------------------------
+		// Convert PAK interrupt assert to CPU assert or Gime assert.
+		// FIXME: This is not correct COCO3 behaviour; the CART line
+		// is used to generate the CART INT on a real COCO3.
+		// SCS and ACIA use this.
+		//----------------------------------------------------------
 		switch (intr) {
 		case INT_CART:
-			GimeAssertCartInterupt();
+			GimeAssertCartInterupt();  // Pass state so Gime can edge trigger?
 			break;
 		case INT_NMI:
 			CPUAssertInterupt(IS_NMI, INT_NMI);
@@ -107,14 +109,14 @@ namespace VCC::Core
 	// Routed plugin calls
 	//-------------------
 
-	void PakRouter::process_horizontal_sync()
+	void PakRouter::horizontal_sync()
 	{
 		if (mpi_not_active()) {
-			slot_process_hsync(0);
+			slot_hsync(0);
 			return;
 		}
 		for (int i = 4; i > 0; i--)
-			slot_process_hsync(i);
+			slot_hsync(i);
 	}
 
 	unsigned short PakRouter::sample_audio()
@@ -163,7 +165,7 @@ namespace VCC::Core
 		// No mpi just write the port. For sure we don't want to
 		// mess with the pakrouter's idea of what scs and cts are
 		if (mpi_not_active()) {
-			if (auto* cart = slots_[0])
+			if (auto& cart = slots_[0])
 				cart->write_port(port, value);
 			return;
 		}
@@ -191,7 +193,7 @@ namespace VCC::Core
 	{
 		// No mpi just return what ever the port says
 		if (mpi_not_active()) {
-			if (auto* cart = slots_[0])
+			if (auto& cart = slots_[0])
 				return cart->read_port(port);
 			return 0;
 		}
@@ -218,6 +220,7 @@ namespace VCC::Core
 		return 0;
 	}
 
+	// Build combined status line for loaded carts
 	void PakRouter::plugin_status(char * txt, size_t len)
 	{
 		if (mpi_not_active()) {

@@ -18,6 +18,7 @@
 //	You should have received a copy of the GNU General Public License along with
 //	VCC (Virtual Color Computer). If not, see <http://www.gnu.org/licenses/>.
 ////////////////////////////////////////////////////////////////////////////////
+
 #include "mpi.h"
 #include "resource.h"
 #include <vcc/util/DialogOps.h>
@@ -30,14 +31,15 @@ static std::string gConfigurationFilename;
 HWND gVccWnd;
 
 slot_id_type SlotId = 0;
-const std::shared_ptr<host_cartridge_callbacks>
-	gHostCallbacks(std::make_shared<host_cartridge_callbacks>(SlotId, gConfigurationFilename));
+//const std::shared_ptr<host_cartridge_callbacks>
+//	gHostCallbacks(std::make_shared<host_cartridge_callbacks>(SlotId, gConfigurationFilename));
 
 // mpi configuration object
 multipak_configuration gMultiPakConfiguration("MPI");
 
 // mpi cartridge object
-multipak_cartridge gMultiPakInterface(gMultiPakConfiguration, gHostCallbacks);
+//multipak_cartridge gMultiPakInterface(gMultiPakConfiguration, gHostCallbacks);
+multipak_cartridge gMultiPakInterface(gMultiPakConfiguration);
 
 // the config dialog
 configuration_dialog gConfigurationDialog(gMultiPakConfiguration, gMultiPakInterface);
@@ -69,10 +71,10 @@ extern "C"
 		gMultiPakConfiguration.configuration_path(configuration_path);
 		gConfigurationFilename = configuration_path;
 		gVccWnd = hVccWnd;
-		gHostCallbacks->read_memory_byte_ = callbacks->read_memory_byte;
-		gHostCallbacks->write_memory_byte_ = callbacks->write_memory_byte;
-		gHostCallbacks->assert_interrupt_ = callbacks->assert_interrupt;
-		gHostCallbacks->assert_cartridge_line_ = callbacks->assert_cartridge_line;
+//		gHostCallbacks->read_memory_byte_ = callbacks->read_memory_byte;
+//		gHostCallbacks->write_memory_byte_ = callbacks->write_memory_byte;
+//		gHostCallbacks->assert_interrupt_ = callbacks->assert_interrupt;
+//		gHostCallbacks->assert_cartridge_line_ = callbacks->assert_cartridge_line;
 		gMultiPakInterface.start();
 	}
 

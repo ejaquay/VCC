@@ -51,7 +51,7 @@ namespace VCC::Core
 		return catalog_id_;
 	}
 
-	rom_cartridge::description_type rom_cartridge:: description() const
+	rom_cartridge::description_type rom_cartridge::description() const
 	{
 		return {};
 	}

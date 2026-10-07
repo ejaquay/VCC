@@ -1,4 +1,4 @@
-//#define USE_LOGGING
+#define USE_LOGGING
 ////////////////////////////////////////////////////////////////////////////////
 //	Copyright 2015 by Joseph Forgione
 //	This file is part of VCC (Virtual Color Computer).
@@ -24,14 +24,15 @@
 #include <fstream>
 #include <iterator>
 
-//TODO remove this after paralell testing is complete
-bool gIgnoreNextDuplicateCheck = false;
+//----------------------------------------------------------------------------
+// The cartridge loader loads the cart's file and creates the cartridge object 
+//----------------------------------------------------------------------------
 
 namespace VCC::Core
 {
-
 	namespace
 	{
+		//TODO use existing utility function for this
 		std::string extract_filename(std::string name)
 		{
 			name = name.substr(name.find_last_of("/\\") + 1);
@@ -58,17 +59,17 @@ namespace VCC::Core
 		input.seekg(0, std::ios::beg);
 		input.read(reinterpret_cast<char*>(header), 2);
 		if (!input) {
-			DLOG_C("cartridge_loader cartridge is too small\n");
+			DLOG_C("cartridge_loader.determine_cartridge_type cart too small\n");
 			return cartridge_file_type::rom_image;
 		}
 
 		// Check for magic 'MZ' DLL indicator
 		if (header[0] == 'M' && header[1] == 'Z') {
-			DLOG_C("cartridge_loader cartridge type library\n");
+			DLOG_C("cartridge_loader.determine_cartridge_type Cpak\n");
 			return cartridge_file_type::library;
 		}
 
-		DLOG_C("cartridge_loader cartridge type rom\n");
+		DLOG_C("cartridge_loader.determine_cartridge_type ROM\n");
 		return cartridge_file_type::rom_image;
 	}
 
@@ -77,7 +78,7 @@ namespace VCC::Core
 		std::unique_ptr<cartridge_callbacks> parent_callbacks,
 		const std::string& filename)
 	{
-		DLOG_C("cartridge_loader load rom\n");
+		DLOG_C("cartridge_loader.load_rom_cartridge\n");
 		constexpr size_t PAK_MAX_MEM = 0x40000;
 
 		std::vector<uint8_t> romImage;
@@ -87,7 +88,7 @@ namespace VCC::Core
 		// Open the ROM file, fail if unable to
 		std::ifstream input(filename, std::ios::binary);
 		if (!input.is_open()) {
-			DLOG_C("cartridge_loader rom open fail\n");
+			DLOG_C("cartridge_loader.load_rom_cartridge open fail\n");
 			return { nullptr, nullptr, cartridge_loader_status::cannot_open };
 		}
 
@@ -99,7 +100,7 @@ namespace VCC::Core
 			back_inserter(romImage));
 
 		if (romImage.empty()) {
-			DLOG_C("cartridge_loader rom empty\n");
+			DLOG_C("cartridge_loader.load_rom_cartridge empty\n");
 			return { nullptr, nullptr, cartridge_loader_status::not_rom };
 		}
 
@@ -119,7 +120,8 @@ namespace VCC::Core
 			nullptr,
 			std::move(rom),
 			cartridge_loader_status::success };
-		DLOG_C("cartridge_loader rom object ret %p\n",result.cartridge.get());
+
+		DLOG_C("cartridge_loader.load_rom_cartridge success %s\n",filename.c_str());
 
 		return result;
 	}
@@ -134,23 +136,26 @@ namespace VCC::Core
 		const cpak_callbacks& cpak_callbacks)
 	{
 
-		// TODO remove ignore after parallel testing is complete
+		DLOG_C("cartridge_loader.load_cpak_cartridge %s\n",filename.c_str());
+
 		auto h = GetModuleHandle(filename.c_str());
-		if (h != nullptr && ! gIgnoreNextDuplicateCheck) {
+		if (h != nullptr) {
+			DLOG_C("cartridge_loader.load_cpak_cartridge duplicate load\n");
 			return { nullptr, nullptr, cartridge_loader_status::already_loaded };
 		}
 
+		// Load the cart DLL
 		cartridge_loader_result details;
 		HMODULE hCart = LoadLibrary(filename.c_str());
 		details.handle.reset(hCart);
 
-		DLOG_C("cartridge_loader LoadLibrary %s %d\n", filename.c_str(), GetLastError());
 		if (details.handle == nullptr)
 		{
-			gIgnoreNextDuplicateCheck = false;  //TODO remove
+			DLOG_C("cartridge_loader.load_cpak_cartridge dll load failed\n");
 			return { nullptr, nullptr, cartridge_loader_status::cannot_open };
 		}
 
+		// Create cartridge object if DLL has a PakInitialize export
 		if (GetProcAddress(details.handle.get(), "PakInitialize") != nullptr)
 		{
 			details.cartridge = std::make_unique<VCC::Core::cpak_cartridge>(
@@ -160,12 +165,12 @@ namespace VCC::Core
 				hVccWnd,
 				cpak_callbacks);
 			details.load_result = cartridge_loader_status::success;
-
-			gIgnoreNextDuplicateCheck = false; //TODO remove
+			DLOG_C("cartridge_loader.load_cpak_cartridge success %p\n",details.cartridge.get());
 			return details;
 		}
 
-		gIgnoreNextDuplicateCheck = false; //TODO remove
+		// Else not a valid cartridge plugin DLL
+		DLOG_C("cartridge_loader.load_cpak_cartridge dll initialize missing\n");
 		return { nullptr, nullptr, cartridge_loader_status::not_expansion };
 	}
 
@@ -179,13 +184,13 @@ namespace VCC::Core
 	// libcommon/include/vcc/bus/cpak_cartridge_definitions.h.
 	cartridge_loader_result load_cartridge(
 		const std::string& filename,
-		std::unique_ptr<cartridge_callbacks> parent_callbacks,
+		std::unique_ptr<cartridge_callbacks> parent_callbacks,  //depreciated
 		slot_id_type SlotId,
 		const std::string& iniPath,
 		HWND hVccWnd,
 		const cpak_callbacks& cpak_callbacks)
 	{
-		DLOG_C("cartridge_loader load_cartridge %s\n", filename.c_str());
+		DLOG_C("cartridge_loader.load_cartridge %s\n", filename.c_str());
 		switch (VCC::Core::determine_cartridge_type(filename))
 		{
 		default:

@@ -37,6 +37,6 @@ void BuildCartMenu();
 void CartMenuActivated(unsigned int);
 bool SetActiveSlot(unsigned int);
 bool UnloadSlot(unsigned int);
-bool LoadSlot(unsigned int, const PluginMsgData *);
-bool SendSlot(unsigned int, PluginMsgData *);
-
+bool LoadSlot(unsigned int, const CartLoadRequest *);
+bool GetSlotCartName(unsigned int slot, CartNameReply *);
+bool GetSlotCartDescript(unsigned int slot, CartDescReply *);

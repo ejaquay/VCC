@@ -1,4 +1,4 @@
-//#define USE_LOGGING
+#define USE_LOGGING
 ////////////////////////////////////////////////////////////////////////////////
 //	Copyright 2015 by Joseph Forgione
 //	This file is part of VCC (Virtual Color Computer).
@@ -45,6 +45,11 @@ namespace
 	} };
 }
 
+// TODO: Every mpi_ method must be examined to remove all
+// overloading or loading or unloading of cartridges
+// the mpi_ object is not a cartridge, it is a holder of
+// sufficient state to drive the UI
+
 configuration_dialog::configuration_dialog(
 	multipak_configuration& configuration,
 	multipak_cartridge& mpi)
@@ -52,6 +57,14 @@ configuration_dialog::configuration_dialog(
 	configuration_(configuration),
 	mpi_(mpi)
 {}
+
+// Define array of slot content information
+// TODO: This belongs in the mpi object
+struct slot_info {
+	std::string name{};
+	uint32_t type; // 0==empty or Null
+};
+std::array<slot_info,5> gSlots{};
 
 
 void configuration_dialog::open()
@@ -101,11 +114,20 @@ void configuration_dialog::select_new_cartridge(unsigned int item)
 	}
 	dlg.setFlags(OFN_FILEMUSTEXIST);
 
-	if (dlg.show(0, dialog_handle_))
-	{
-		mpi_.eject_cartridge(slot); // Should not be needed
+// TODO: Every mpi_ reference to cartridges must be removed
+	if (dlg.show(0, dialog_handle_)) {
+	
+// 		mpi_.eject_cartridge(slot);
+		SendUnloadSlot(gVccWnd, slot+1); // Slot is 1-4
 
-		if (mpi_.mount_cartridge(slot, dlg.path()) == cartridge_loader_status::success)
+		DLOG_C("MMI Config mount cartridge %d, %s\n",slot+1,dlg.path());
+
+//		if (mpi_.mount_cartridge(slot, dlg.path()) == cartridge_loader_status::success)
+
+		CartLoadRequest slotData{};
+		strcpy_s(slotData.pluginPath, slotData.size, dlg.path());
+
+		if (SendLoadSlot(gVccWnd, slot+1, slotData) )
 		{
 			configuration_.slot_cartridge_path(slot, dlg.path());
 		    // Update default module directory setting
@@ -115,20 +137,25 @@ void configuration_dialog::select_new_cartridge(unsigned int item)
 				configuration_.last_accessed_rom_path(dlg.getdir());
 			}
 		}
-
 	}
 	update_slot_details(slot);
 }
 
 void configuration_dialog::set_selected_slot(size_t slot)
 {
+	// Get cart description if there is a cart in the slot
+	// Sends message to pakinterface requesting the description
+	CartDescReply rpy;
+	GetCartDesc(gVccWnd, slot+1, rpy);
 
 	SendDlgItemMessage(
 		dialog_handle_,
 		IDC_MODINFO,
 		WM_SETTEXT,
 		0,
-		reinterpret_cast<LPARAM>(mpi_.slot_description(slot).c_str()));
+		reinterpret_cast<LPARAM>(rpy.description)
+	);
+//		reinterpret_cast<LPARAM>(mpi_.slot_description(slot).c_str()));
 
 	for (auto ndx(0u); ndx < gSlotUiElementIds.size(); ndx++)
 	{
@@ -140,28 +167,41 @@ void configuration_dialog::set_selected_slot(size_t slot)
 			0);
 	}
 
-	// FIXME: Maybe move this to the callsite or when the dialog closes or at least make it optional?
+// select slot switch actually belons in the mpi_ object
+// but does it need to be int the configuration also??
 	mpi_.switch_to_slot(slot);
 	configuration_.selected_slot(slot);
 
 }
 
-
 void configuration_dialog::update_slot_details(size_t slot)
 {
+	// Get cart name if there is a cart in the slot
+	// Sends message to pakinterface requesting the name
+	CartNameReply rpy;
+	GetCartName(gVccWnd, slot+1, rpy);
 	SendDlgItemMessage(
 		dialog_handle_,
 		gSlotUiElementIds[slot].edit_box_id,
 		WM_SETTEXT,
 		0,
-		reinterpret_cast<LPARAM>(mpi_.slot_label(slot).c_str()));
+		reinterpret_cast<LPARAM>(rpy.name)
+	);
+
+	gSlots[slot].name = rpy.name;
+
+	// Kluge until slot type is in base cart object
+	// and a request from pakinterface to obtain it
+	// zero implies the null or empty cartridge
+	gSlots[slot].type = rpy.name[0] ? 1 : 0;
 
 	SendDlgItemMessage(
 		dialog_handle_,
 		gSlotUiElementIds[slot].insert_button_id,
 		WM_SETTEXT,
 		0,
-		reinterpret_cast<LPARAM>(mpi_.empty(slot) ? ">" : "X"));
+		reinterpret_cast<LPARAM>(gSlots[slot].type==0 ? ">" : "X")
+	);
 }
 
 // This could be expanded to include MRU, etc
@@ -214,9 +254,18 @@ void configuration_dialog::eject_or_select_new_cartridge(unsigned int Button)
 			break;
 	}	
 
-	if (!mpi_.empty(slot))
+	//SendUnloadSlot(gVccWnd, slot+1); // Slot is 1-4
+	// TODO: Every mpi_ reference must be removed
+	// How to know the slot is empty????  Might have to
+	//if (!mpi_.empty(slot))
+	if (gSlots[slot].type != 0)
 	{
-		mpi_.eject_cartridge(slot);
+		// This probably does not belong except
+		// mpi_ does need to maintain a cartridge list
+		// mpi_.eject_cartridge(slot);
+		SendUnloadSlot(gVccWnd, slot+1); // Slot is 1-4
+		SendMessage(gVccWnd,WM_VCC_UPD_MENU,(WPARAM) 0,(LPARAM) 0);
+
 		configuration_.slot_cartridge_path(slot, {});
 		update_slot_details(slot);
 	}
@@ -266,7 +315,7 @@ INT_PTR configuration_dialog::process_message(
 		{
 			update_slot_details(slot);
 		}
-
+		// Tell pakinterface switch position
 		set_selected_slot(mpi_.selected_switch_slot());
 		return TRUE;
 

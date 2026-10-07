@@ -379,7 +379,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		// Load slot from MPI
 		case WM_VCC_LOAD_SLOT: {
 			uint32_t slot = static_cast<uint32_t>(wParam);
-			return LoadSlot(slot,reinterpret_cast<const PluginMsgData*>(lParam));
+			return LoadSlot(slot,reinterpret_cast<const CartLoadRequest*>(lParam));
+		}
+
+		// Request name of cartridge in slot (1-4)
+		case WM_VCC_GET_CART_NAME: {
+			uint32_t slot = static_cast<uint32_t>(wParam);
+			auto* req = reinterpret_cast<CartNameReply*>(lParam);
+			return GetSlotCartName(slot,req);
+		}
+
+		// Request description of cartridge in slot (1-4)
+		case WM_VCC_GET_CART_DESCRIPT: {
+			uint32_t slot = static_cast<uint32_t>(wParam);
+			auto* req = reinterpret_cast<CartDescReply*>(lParam);
+			return GetSlotCartDescript(slot,req);
 		}
 
 		case WM_SYSCOMMAND:
