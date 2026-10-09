@@ -21,18 +21,17 @@
 #include <vcc/bus/cartridge_loader.h>
 #include <vcc/bus/cartridge_menuitem.h>
 #include <vcc/util/critical_section.h>
-#include <array>
 
 constexpr size_t NUMSLOTS = 4u;
 
-class multipak_supervisor //: public ::VCC::Core::cartridge
+class multipak_supervisor
 {
 public:
 
 	using callbacks_type = ::VCC::Core::cartridge_callbacks;
 	using mount_status_type = ::VCC::Core::cartridge_loader_status;
 
-	// TODO globally replace these stupid type defs with size_t and string
+	// TODO someday replace these stupid type defs with size_t and string
 	using slot_id_type = std::size_t;
 	using path_type = std::string;
 	using label_type = std::string;

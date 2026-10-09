@@ -24,10 +24,10 @@
 #include <vcc/util/filesystem.h>
 #include <vcc/util/logger.h>
 #include <vcc/bus/cartridge_messages.h>
+#include <array>
 
 namespace
 {
-
 	using cartridge_loader_status = VCC::Core::cartridge_loader_status;
 
 	struct cartridge_ui_element_identifiers
@@ -53,8 +53,7 @@ configuration_dialog::configuration_dialog(
 	mpi_(mpi)
 {}
 
-// Define array of slot content information
-// TODO: This belongs in the mpi object
+// Array for slot names
 struct slot_info {
 	std::string name{};
 	uint32_t type; // 0==empty or Null
@@ -72,7 +71,6 @@ void configuration_dialog::open()
 			callback_procedure,
 			reinterpret_cast<LPARAM>(this));
 	}
-
 	ShowWindow(dialog_handle_, SW_SHOWNORMAL);
 }
 
@@ -156,11 +154,8 @@ void configuration_dialog::set_selected_slot(size_t slot)
 			0);
 	}
 
-// select slot switch actually belons in the mpi_ object
-// but does it need to be int the configuration also??
 	mpi_.switch_to_slot(slot);
 	configuration_.selected_slot(slot);
-
 }
 
 void configuration_dialog::update_slot_details(size_t slot)
@@ -278,7 +273,6 @@ INT_PTR CALLBACK configuration_dialog::callback_procedure(
 
 	return dialog->process_message(hDlg, message, wParam);
 }
-
 
 INT_PTR configuration_dialog::process_message(
 	HWND hDlg,

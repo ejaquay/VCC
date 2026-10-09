@@ -58,7 +58,7 @@ extern "C"
 
 	//Initialize MPI -	capture callback addresses and build menus.
 	__declspec(dllexport) void PakInitialize(
-		slot_id_type SlotId,                   // should always be zero
+		slot_id_type SlotId,
 		const char* const configuration_path,
 		HWND hVccWnd,
 		const cpak_callbacks* const callbacks)
@@ -74,70 +74,32 @@ extern "C"
 		gMultiPakConfiguration.configuration_path(configuration_path);
 		gConfigurationFilename = configuration_path;
 		gVccWnd = hVccWnd;
-		gMultiPakInterface.start();  //TODO Not needed
+		gMultiPakInterface.start();
 	}
 
 	__declspec(dllexport) void PakTerminate()
 	{
 		gConfigurationDialog.close();
-		//TODO remove pakinterface, move all other needed clean up to here
 		gMultiPakInterface.stop();
 	}
 
 	__declspec(dllexport) void PakMenuItemClicked(unsigned char menu_item_id)
 	{
-		//TODO move item clicked to config
 		gMultiPakInterface.menu_item_clicked(menu_item_id);
 	}
 
 	// Fetch menu item list for MPI and carts it has loaded
 	__declspec(dllexport) bool PakGetMenuItem(menu_item_entry* item, size_t index)
 	{
-		//TODO move get menu item to config
 		return gMultiPakInterface.get_menu_item(item, index);
 	}
-
-	// Write to port
-	//__declspec(dllexport) void PakWritePort(unsigned char port_id,unsigned char value)
-	//{
-	//	gMultiPakInterface.write_port(port_id, value);
-	//	return;
-	//}
-
-	// Read from port
-	//__declspec(dllexport) unsigned char PakReadPort(unsigned char port_id)
-	//{
-	//	return gMultiPakInterface.read_port(port_id);
-	//}
 
 	// Reset module
 	__declspec(dllexport) unsigned char PakReset()
 	{
-		//TODO move to config
 		gMultiPakInterface.reset();
 		return 0;
 	}
-
-	//__declspec(dllexport)  void PakProcessHorizontalSync()
-	//{
-	//	gMultiPakInterface.process_horizontal_sync();
-	//}
-
-	//__declspec(dllexport)  unsigned char PakReadMemoryByte(unsigned short memory_address)
-	//{
-	//	return gMultiPakInterface.read_memory_byte(memory_address);
-	//}
-
-	// Return MPI status.
-	//__declspec(dllexport) void PakGetStatus(char* text_buffer, size_t buffer_size)
-	//{
-//		gMultiPakInterface.status(text_buffer, buffer_size);
-//	}
-
-	//__declspec(dllexport) unsigned short PakSampleAudio()
-	//{
-	//	return gMultiPakInterface.sample_audio();
-	//}
 }
 
 // DLLMain

@@ -16,6 +16,7 @@
 //	You should have received a copy of the GNU General Public License along with
 //	VCC (Virtual Color Computer). If not, see <http://www.gnu.org/licenses/>.
 ////////////////////////////////////////////////////////////////////////////////
+
 #include "multipak_supervisor.h"
 #include "mpi.h"
 #include "resource.h"
@@ -39,9 +40,9 @@ multipak_supervisor::multipak_supervisor(
 
 void multipak_supervisor::start()
 {
-	// Mount mpi slots 
-//	for (auto mpi_slot(0u); mpi_slot < slots_.size(); mpi_slot++)
-	for (int mpi_slot=0; mpi_slot < 5; mpi_slot++)
+	// Mount mpi slots per settings mpi_slit is 0-3, Slot is 1-4
+	// Slot 0 is the the boot slot (where MPI cart is)
+	for (int mpi_slot = 0; mpi_slot < 4; mpi_slot++)
 	{
 		const auto path(VCC::Util::find_pak_module_path(
 					configuration_.slot_cartridge_path(mpi_slot)));
@@ -50,7 +51,7 @@ void multipak_supervisor::start()
 			DLOG_C("\nmultipak_supervisor.start slot:%d %s\n",mpi_slot+1,path.c_str()); 
 			CartLoadRequest slotData{};
 			strcpy_s(slotData.pluginPath, slotData.size, path.c_str());
-			SendLoadSlot(gVccWnd, mpi_slot+1, slotData); // Slot is 1-4
+			SendLoadSlot(gVccWnd, mpi_slot+1, slotData);
 		}
 	}
 	switch_slot_ = configuration_.selected_slot();
@@ -74,7 +75,7 @@ void multipak_supervisor::reset()
 	switch_slot_ = mpi_slot;
 
 	// Tell pakinterface what the active slot is
-	SendActiveSlot(gVccWnd, switch_slot_);
+	SendActiveSlot(gVccWnd, switch_slot_); //0-3
 }
 
 void multipak_supervisor::menu_item_clicked(unsigned char menu_item_id)
