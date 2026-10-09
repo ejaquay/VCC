@@ -58,6 +58,12 @@ struct CartDescReply {
 // DLL <-> VCC Messages and helpers
 //----------------------------------------------------
 
+// Fatal (any plugin)
+inline constexpr uint32_t WM_VCC_FATAL = WM_APP + 100;
+inline LRESULT SendFatalError(HWND hwnd, uint32_t err) {
+	return SendMessage(hwnd,WM_VCC_FATAL, err, 0);
+}
+
 // Hard Reset (any plugin)
 inline constexpr uint32_t WM_VCC_CPU_RESET = WM_APP + 101;
 inline LRESULT SendHardReset(HWND hwnd) {

@@ -16,7 +16,7 @@
 //	You should have received a copy of the GNU General Public License along with
 //	VCC (Virtual Color Computer). If not, see <http://www.gnu.org/licenses/>.
 ////////////////////////////////////////////////////////////////////////////////
-#include "multipak_cartridge.h"
+#include "multipak_supervisor.h"
 #include "mpi.h"
 #include "resource.h"
 #include <vcc/util/coreutil.h>
@@ -32,59 +32,41 @@
 // mpi_slot indexes used elsewhere in this source differ, they represent only
 // multipak mpi_slots and are numbered 0-3,  (SlotId = mpi_slot+1)
 
-multipak_cartridge::multipak_cartridge(
+multipak_supervisor::multipak_supervisor(
 	multipak_configuration& configuration)
 	:
 	configuration_(configuration) {}
 
-// MPI Cart information 
-multipak_cartridge::name_type multipak_cartridge::name() const
-{
-	return ::VCC::Util::load_string(gModuleInstance, IDS_MODULE_NAME);
-}
-
-multipak_cartridge::catalog_id_type multipak_cartridge::catalog_id() const
-{
-	return ::VCC::Util::load_string(gModuleInstance, IDS_CATNUMBER);
-}
-
-multipak_cartridge::description_type multipak_cartridge::description() const
-{
-	return ::VCC::Util::load_string(gModuleInstance, IDS_CATNUMBER);
-}
-
-void multipak_cartridge::start()
+void multipak_supervisor::start()
 {
 	// Mount mpi slots 
-	for (auto mpi_slot(0u); mpi_slot < slots_.size(); mpi_slot++)
+//	for (auto mpi_slot(0u); mpi_slot < slots_.size(); mpi_slot++)
+	for (int mpi_slot=0; mpi_slot < 5; mpi_slot++)
 	{
 		const auto path(VCC::Util::find_pak_module_path(
 					configuration_.slot_cartridge_path(mpi_slot)));
 		if (!path.empty())
 		{
-			DLOG_C("\nmultipak_cartridge.start slot:%d %s\n",mpi_slot+1,path.c_str()); 
+			DLOG_C("\nmultipak_supervisor.start slot:%d %s\n",mpi_slot+1,path.c_str()); 
 			CartLoadRequest slotData{};
 			strcpy_s(slotData.pluginPath, slotData.size, path.c_str());
 			SendLoadSlot(gVccWnd, mpi_slot+1, slotData); // Slot is 1-4
 		}
 	}
-
 	switch_slot_ = configuration_.selected_slot();
 	SendActiveSlot(gVccWnd, switch_slot_);
 	SendMessage(gVccWnd,WM_VCC_UPD_MENU,(WPARAM) 0,(LPARAM) 0);
 }
 
-void multipak_cartridge::stop()
+void multipak_supervisor::stop()
 {
-	DLOG_C("multipak_cartridge stop\n");
-	// pakinteface will automatically stop multipak slots before
-	// the boot slot is stopped. It does not need to be done here
+	DLOG_C("multipak_supervisor stop\n");
 	gConfigurationDialog.close();
 }
 
-void multipak_cartridge::reset()
+void multipak_supervisor::reset()
 {
-	DLOG_C("multipak_cartridge reset\n");
+	DLOG_C("multipak_supervisor reset\n");
 
 	VCC::Util::section_locker lock(mutex_);
 
@@ -95,40 +77,9 @@ void multipak_cartridge::reset()
 	SendActiveSlot(gVccWnd, switch_slot_);
 }
 
-//--------------------------------------------
-// TODO Clean these out. MPI does not use them
-void multipak_cartridge::process_horizontal_sync()
+void multipak_supervisor::menu_item_clicked(unsigned char menu_item_id)
 {
-	DLOG_C("XXX multipak_cartridge hsync\n");
-}
-void multipak_cartridge::write_port(unsigned char port_id, unsigned char value)
-{
-	DLOG_C("XXX multipak_cartridge write_port\n"); 
-}
-unsigned char multipak_cartridge::read_port(unsigned char port_id)
-{
-	DLOG_C("XXX multipak_cartridge read_port\n"); 
-	return 0;
-}
-unsigned char multipak_cartridge::read_memory_byte(unsigned short memory_address)
-{
-	DLOG_C("XXX multipak_cartridge read_memory_byte\n"); 
-	return 0;
-}
-void multipak_cartridge::status(char* text_buffer, size_t buffer_size)
-{
-	DLOG_C("XXX multipak_cartridge status\n"); 
-}
-unsigned short multipak_cartridge::sample_audio()
-{
-	DLOG_C("XXX multipak_cartridge sample_audio\n"); 
-	return 0;
-}
-//--------------------------------------------
-
-void multipak_cartridge::menu_item_clicked(unsigned char menu_item_id)
-{
-	DLOG_C("multipak_cartridge menu_item_clicked %d\n", menu_item_id); 
+	DLOG_C("multipak_supervisor menu_item_clicked %d\n", menu_item_id); 
 
 	if (menu_item_id == 19)	//MPI Config
 	{
@@ -137,7 +88,7 @@ void multipak_cartridge::menu_item_clicked(unsigned char menu_item_id)
 }
 
 // Return MPI menu
-bool multipak_cartridge::get_menu_item(menu_item_entry* item, size_t index)
+bool multipak_supervisor::get_menu_item(menu_item_entry* item, size_t index)
 {
 	using VCC::Bus::gDllCartMenu;
 	if (!item) return false;
@@ -149,45 +100,29 @@ bool multipak_cartridge::get_menu_item(menu_item_entry* item, size_t index)
 	return gDllCartMenu.copy_item( *item, index);
 }
 
-
-multipak_cartridge::label_type multipak_cartridge::slot_label(slot_id_type mpi_slot) const
-{
-	VCC::Util::section_locker lock(mutex_);
-	return "";
-}
-
-multipak_cartridge::description_type multipak_cartridge::slot_description(slot_id_type mpi_slot) const
-{
-	VCC::Util::section_locker lock(mutex_);
-	return "";
-}
-
-// Load a cartridge in multi slot
-multipak_cartridge::mount_status_type multipak_cartridge::mount_cartridge(
+// Send load cartridge request to pakinterface
+multipak_supervisor::mount_status_type multipak_supervisor::mount_cartridge(
 	slot_id_type mpi_slot, const path_type& filename)
 {
-	// Send load slot request message to WndProc
 	CartLoadRequest slotData{};
 	strcpy_s(slotData.pluginPath, slotData.size, filename.c_str());
 	SendLoadSlot(gVccWnd, mpi_slot+1, slotData); // Slot is 1-4
 
-	// Send menu update to WndProc
+	// Dynamic menu update
 	SendMessage(gVccWnd,WM_VCC_UPD_MENU,(WPARAM) 0,(LPARAM) 0);
-
-	//	return loadedCartridge.load_result;
+	
 	return mount_status_type::success;
 }
 
-// The following has no effect until VCC is reset
-void multipak_cartridge::switch_to_slot(slot_id_type mpi_slot)
+void multipak_supervisor::switch_to_slot(slot_id_type mpi_slot)
 {
-	DLOG_C("multipak_cartridge set selected switch slot (0-3) %d\n", mpi_slot); 
+	DLOG_C("multipak_supervisor set selected switch slot (0-3) %d\n", mpi_slot); 
 	switch_slot_ = mpi_slot;
 }
 
-multipak_cartridge::slot_id_type multipak_cartridge::selected_switch_slot() const
+multipak_supervisor::slot_id_type multipak_supervisor::selected_switch_slot() const
 {
-	DLOG_C("multipak_cartridge get selected switch slot %d\n", switch_slot_); 
+	DLOG_C("multipak_supervisor get selected switch slot %d\n", switch_slot_); 
 	return switch_slot_;
 }
 

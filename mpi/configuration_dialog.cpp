@@ -47,7 +47,7 @@ namespace
 
 configuration_dialog::configuration_dialog(
 	multipak_configuration& configuration,
-	multipak_cartridge& mpi)
+	multipak_supervisor& mpi)
 	:
 	configuration_(configuration),
 	mpi_(mpi)

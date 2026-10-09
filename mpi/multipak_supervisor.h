@@ -16,7 +16,6 @@
 //	VCC (Virtual Color Computer). If not, see <http://www.gnu.org/licenses/>.
 ////////////////////////////////////////////////////////////////////////////////
 #pragma once
-#include "cartridge_slot.h"
 #include "multipak_configuration.h"
 #include <vcc/bus/basic_cartridge.h>
 #include <vcc/bus/cartridge_loader.h>
@@ -26,14 +25,13 @@
 
 constexpr size_t NUMSLOTS = 4u;
 
-class multipak_cartridge : public ::VCC::Core::cartridge
+class multipak_supervisor //: public ::VCC::Core::cartridge
 {
 public:
 
 	using callbacks_type = ::VCC::Core::cartridge_callbacks;
 	using mount_status_type = ::VCC::Core::cartridge_loader_status;
 
-	// Lets hide basic types to exercis developer menmory
 	// TODO globally replace these stupid type defs with size_t and string
 	using slot_id_type = std::size_t;
 	using path_type = std::string;
@@ -42,35 +40,19 @@ public:
 
 public:
 
-	multipak_cartridge( multipak_configuration& configuration );
+	multipak_supervisor( multipak_configuration& configuration );
 
-	multipak_cartridge(const multipak_cartridge&) = delete;
-	multipak_cartridge(multipak_cartridge&&) = delete;
+	multipak_supervisor(const multipak_supervisor&) = delete;
+	multipak_supervisor(multipak_supervisor&&) = delete;
 
-	multipak_cartridge& operator=(const multipak_cartridge&) = delete;
-	multipak_cartridge& operator=(multipak_cartridge&&) = delete;
+	multipak_supervisor& operator=(const multipak_supervisor&) = delete;
+	multipak_supervisor& operator=(multipak_supervisor&&) = delete;
 
-	//	Cartridge implementation
-	name_type name() const override;
-	catalog_id_type catalog_id() const override;
-	description_type description() const override;
-
-	void start() override;
-	void stop() override;
-
-	void reset() override;
-	void process_horizontal_sync() override;
-	void write_port(unsigned char port_id, unsigned char value) override;
-	unsigned char read_port(unsigned char port_id) override;
-	unsigned char read_memory_byte(unsigned short memory_address) override;
-	void status(char* text_buffer, size_t buffer_size) override;
-	unsigned short sample_audio() override;
-	void menu_item_clicked(unsigned char menu_item_id) override;
-	bool get_menu_item(menu_item_entry* item, size_t index) override;
-
-	//	Multi-pak implementation
-	label_type slot_label(slot_id_type slot) const;
-	description_type slot_description(slot_id_type slot) const;
+	void start();
+	void stop();
+	void reset();
+	void menu_item_clicked(unsigned char menu_item_id);
+	bool get_menu_item(menu_item_entry* item, size_t index);
 
 	bool empty(slot_id_type slot) const;
 
@@ -78,10 +60,6 @@ public:
 
 	void switch_to_slot(slot_id_type slot);
 	slot_id_type selected_switch_slot() const;
-	slot_id_type selected_scs_slot() const;
-
-	// Make automatic when mounting, ejecting, selecting slot, etc. TODO: is this done??
-	void assert_cartridge_line(slot_id_type slot, bool line_state);
 
 private:
 	
@@ -89,6 +67,5 @@ private:
 
 	VCC::Util::critical_section mutex_;
 	multipak_configuration& configuration_;
-	std::array<VCC::Core::cartridge_slot, NUMSLOTS> slots_;
 	slot_id_type switch_slot_ = default_switch_slot_value;
 };

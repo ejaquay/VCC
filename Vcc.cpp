@@ -346,6 +346,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 #endif
 
+		// Fatal error notification
+		// TODO: enum error code in wparam to give user more info
+		case WM_VCC_FATAL: {
+			MessageBox(nullptr,
+				"A fatal error has occurred. VCC will close",
+				"VCC Fatal Error",
+				MB_ICONERROR | MB_OK);
+			// TODO: This is brutal perhaps a cleaner shutdown?
+			DWORD pid = GetCurrentProcessId();
+			HANDLE h = OpenProcess(PROCESS_TERMINATE,FALSE,pid);
+			TerminateProcess(h,0);
+		}
+
 		// Hard reset VCC
 		case WM_VCC_CPU_RESET:
 			if (EmuState.EmulationRunning)
