@@ -37,7 +37,6 @@ public:
 	void open();
 	void close();
 
-
 private:
 
 	void select_new_cartridge(unsigned int item);

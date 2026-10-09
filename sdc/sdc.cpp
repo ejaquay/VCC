@@ -309,7 +309,6 @@ extern "C"
         const cpak_callbacks* const callbacks)
     {
         gVccWindow = hVccWnd;
-        PrintLogC("\nSDC PakInitialize slot:%d config:%s\n",SlotId,configuration_path);
         DLOG_C("callbacks write=%p cart=%p read=%p int=%p\n",
             callbacks->write_memory_byte,
             callbacks->assert_cartridge_line,
@@ -373,7 +372,6 @@ extern "C"
     __declspec(dllexport) void PakReset()
     {
         DLOG_C("SDC reset\n");
-PrintLogC("\nSDC reset\n");
         // Only initialize SDC if the forground is enabled to avoid hangs
         // This can be revisited if the VCC main handles module loads
         // instead of the MPI.dll

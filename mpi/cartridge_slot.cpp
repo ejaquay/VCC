@@ -18,7 +18,7 @@
 #include "cartridge_slot.h"
 #include <vcc/bus/null_cartridge.h>
 
-
+/// NOT USED ///
 namespace VCC::Core
 {
 
@@ -53,7 +53,6 @@ namespace VCC::Core
 		return *this;
 	}
 
-
 	cartridge_slot::label_type cartridge_slot::label() const
 	{
 		std::string text;
@@ -64,5 +63,4 @@ namespace VCC::Core
 
 		return text;
 	}
-
 }

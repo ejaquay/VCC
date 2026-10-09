@@ -1,4 +1,4 @@
-#define USE_LOGGING
+//#define USE_LOGGING
 //======================================================================
 // This file is part of VCC (Virtual Color Computer).
 // Vcc is Copyright 2015 by Joseph Forgione
@@ -124,7 +124,7 @@ struct cpak_callbacks slot_callbacks = {
 };
 
 //--------------------------------------------------------
-//	Define cartridge exports for the router.
+//	Define cartridge exports for pakrouter.
 //--------------------------------------------------------
 
 // Send hsync to all loaded carts
@@ -172,58 +172,6 @@ unsigned short PackAudioSample()
 	return gPakRouter.sample_audio();
 }
 
-//----------------------------------------------------------
-// FIXME Remove these.
-//
-// Slot adapters.  These are relics of the previous design.
-// The MPI used the adapter to setup callbacks to the
-// pakinterface. Now not needed - pakinterface handles routing.
-//
-// Removal may require modification to loader and cart defintions
-//----------------------------------------------------------
-
-struct multi_slot_adapter : public VCC::Core::cartridge_callbacks
-{
-    multi_slot_adapter( size_t slot, const cpak_callbacks& callbacks)
-    {}
-    path_type configuration_path() const override {
-        return {}; // Carts do NOT modify ini paths!!!
-    }
-// Do nothing...
-    void write_memory_byte(unsigned char value, unsigned short address) override {
-//        callbacks_.write_memory_byte(slot_, value, address);
-    }
-    unsigned char read_memory_byte(unsigned short address) override {
-//        return callbacks_.read_memory_byte(slot_, address);
-		return {};
-	}
-    void assert_cartridge_line(bool state) override {
-//        callbacks_.assert_cartridge_line(slot_, state);
-    }
-    void assert_interrupt(Interrupt intr, InterruptSource src) override {
-//        callbacks_.assert_interrupt(slot_, intr, src);
-    }
-};
-
-struct boot_slot_adapter : public ::VCC::Core::cartridge_callbacks
-{
-    path_type configuration_path() const override {
-        return {};
-    }
-    void write_memory_byte(unsigned char value, unsigned short address) override {
-        MemWrite8(value, address);
-    }
-    unsigned char read_memory_byte(unsigned short address) override {
-        return MemRead8(address);
-    }
-    void assert_cartridge_line(bool line_state) override {
-        SetCart(line_state);
-    }
-    void assert_interrupt(Interrupt interrupt, InterruptSource interrupt_source) override {
-		gPakRouter.cart_assert_interrupt(0,interrupt, interrupt_source);
-    }
-};
-
 //--------------------------------------------------------
 // Build Plugin dynamic menus
 //--------------------------------------------------------
@@ -232,11 +180,6 @@ void BuildCartMenu()
 	//VCC::Util::section_locker lock(gPakMutex);
 	using VCC::Bus::gVccCartMenu;
 	gVccCartMenu.clear();
-
-//  MPI refactor allows auto boot cart unloading
-//	if (gCartSlots[0]->name().empty()) {
-//	} else {
-//	}
 
 	// Item to remove cart in boot slot.
 	if (!gCartSlots[0]->name().empty()) {
@@ -400,18 +343,9 @@ static cartridge_loader_status load_any_cartridge(int slot, const char *filename
 	char iniPath[MAX_PATH]="";
 	GetIniFilePath(iniPath);
 
-	// FIXME:  Adapters are not necessary and should be elminiated
-	std::unique_ptr<VCC::Core::cartridge_callbacks> adapter;
-	if (SlotId == 0) {
-		adapter = std::make_unique<boot_slot_adapter>();
-	} else { 
-		adapter = std::make_unique<multi_slot_adapter>(SlotId -1, slot_callbacks);
-	}
-
 	// Load the cartridge
 	auto loadedCartridge = VCC::Core::load_cartridge(
 		filename,
-		std::move(adapter),   // FIXME remove this (requires router and cart def work)
 		SlotId,
 		iniPath,
 		EmuState.hMsgProxy,
@@ -425,8 +359,6 @@ static cartridge_loader_status load_any_cartridge(int slot, const char *filename
 	// Unload current cart in slot
 	UnloadCartridge(slot);
 	if (slot == 0) gPakRouter.set_active_slot(0);
-
-	//VCC::Util::section_locker lock(gPakMutex);
 
 	DLOG_C("pakinterface.load_any_cartridge move cart object to slot %d %s\n",slot,filename);
 	gCartSlots[slot] = std::move(loadedCartridge.cartridge);
@@ -465,9 +397,10 @@ void UnloadPack()
 	DLOG_C("pakinterface.UnloadPack\n");
 	UnloadCartridge(0);
 	
-//	strcpy(DllPath,"");
-//	SetCart(0);
-//	gPakRouter.set_active_slot(0);
+	strcpy(DllPath,"");
+	SetCart(0);
+
+	gPakRouter.set_active_slot(0);
 	EmuState.ResetPending=2;
 
 	char inifile[MAX_PATH];
@@ -482,11 +415,13 @@ void LoadPack(int type) {
 	LoadCartridgeDialog(type);
 	gPakRouter.set_active_slot(0);
 	EmuState.ResetPending=2;
+	// Assert cart line for ROMs so they can auto run
+	if (type) SetCart(1);   
 }
 
 //--------------------------------------------------------
-// CartMenuActivated is called from VCC WndPrc when a cartridge
-// menu item is clicked. MenuID is unsigned value less that 250
+// CartMenuActivated is called from VCC WndPrc when a 
+// cartridge menu item is clicked. MenuID is less than 250
 //--------------------------------------------------------
 void CartMenuActivated(unsigned int MenuID)
 {
@@ -495,7 +430,7 @@ void CartMenuActivated(unsigned int MenuID)
 	switch (MenuID)
 	{
 	case 1:
-		LoadPack(0);
+		LoadPack(0);  // Load a CPAK
 		break;
 
 	case 2:
@@ -512,20 +447,13 @@ void CartMenuActivated(unsigned int MenuID)
 		break;
 	}
 	case 4:
-		LoadPack(1);
+		LoadPack(1);	// Load a ROM
 		break;
 
 	default:
-		// Router handles external menu clicks
+		// pakrouter handles clicks for plugin UIs
 		gPakRouter.menu_item_clicked(MenuID);
 	}
-
-	//VCC::Util::section_locker lock(gPakMutex);
-
-	// menu_item_clicked takes unsigned char. This limits total number of menu items
-	// to 255. 50 are allocated to host cart and 50 each to mpi carts for 250 total.
-
-	//gCartSlots[0]->menu_item_clicked(MenuID);
 }
 
 //--------------------------------------------------------------
@@ -538,7 +466,7 @@ bool SetActiveSlot(unsigned int cts)
 {
 	DLOG_C("Pakinterface SetActiveSlot CTS/SCS: %d\n",cts);
 
-	// Startup sllot is 0-4 (cts+1).  This allows the pakrouter to decide where to
+	// Startup slot is 0-4 (cts+1).  This allows the pakrouter to decide where to
 	// apply memory and regsister I/O requests from the Coco CPU.  If startup slot
 	// is zero the MPI slots are ignored. If start up slot is non zero it controls
 	// the cts/scs functions of the mpi slots, numbered 1-4.
@@ -564,7 +492,7 @@ bool UnloadSlot(unsigned int slot)
 // mpi/multipak_cartridge.cpp
 bool LoadSlot(unsigned int slot, const CartLoadRequest * data)
 {
-PrintLogC("pakinterface LoadSlot %d %s\n",slot,data->pluginPath);
+	DLOG_C("pakinterface LoadSlot %d %s\n",slot,data->pluginPath);
 	if (slot < 1 || slot > 4) {
 		DLOG_C("Pakinterface LoadSlot bad slot num\n");
 		return false;
@@ -575,30 +503,25 @@ PrintLogC("pakinterface LoadSlot %d %s\n",slot,data->pluginPath);
 		return false;
 	}
 
-//	if (data->size != sizeof(CartLoadRequest)) {
-//		DLOG_C("Pakinterface LoadSlot bad data size\n");
-//		return false;
-//	}
-
 	load_any_cartridge(slot, data->pluginPath);
 	return true;
 }
 
-// Get cart name in slot (for MMI config dialog)
+// Gets the name of cart in a slot.
 bool GetSlotCartName(unsigned int slot, CartNameReply* rpy)
 {
 	auto* cart = gCartSlots[slot].get();
     if (cart) {
     	std::string s = cart->name();
     	std::strncpy(rpy->name, s.c_str(), rpy->size);
-    	rpy->name[rpy->size-1] = '\0';   //truncates
+    	rpy->name[rpy->size-1] = '\0';
         return true;
     }
     rpy->name[0] = '\0';
     return false;
 }
 
-// Get cart description in slot (for MMI config dialog)
+// Get description of cart a in slot
 bool GetSlotCartDescript(unsigned int slot, CartDescReply* rpy)
 {
 	auto* cart = gCartSlots[slot].get();

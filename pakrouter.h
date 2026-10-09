@@ -34,7 +34,7 @@ using plugin_ptr = typename cartridge_loader_result::cartridge_ptr_type;
 	class PakRouter
 	{
 	public:
-		// Constructor
+		// Constructor 
 		PakRouter::PakRouter(std::array<plugin_ptr, NumCartSlots>& slots)
 			: slots_(slots) {};
 
@@ -142,8 +142,7 @@ using plugin_ptr = typename cartridge_loader_result::cartridge_ptr_type;
 
 	private:
 
-		// Slots for cartridge objects		LoadPack(0);
-
+		// Slots for cartridge objects;
 		std::array<plugin_ptr, NumCartSlots>& slots_;
 
 		// active_slot_ refers to the slot which exposes ROM to

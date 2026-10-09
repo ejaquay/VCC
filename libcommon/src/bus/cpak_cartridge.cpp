@@ -24,15 +24,14 @@
 
 namespace VCC::Core
 {
-
 	namespace
 	{
-
 		template<class Type_>
 		Type_ GetImportedProcAddress(HMODULE module, LPCSTR procName, Type_ defaultFunction)
 		{
-			const auto importedFunction(reinterpret_cast<Type_>(GetProcAddress(module, procName)));
-
+			const auto importedFunction(reinterpret_cast<Type_>(
+						GetProcAddress(module, procName))
+			);
 			return importedFunction ? importedFunction : defaultFunction;
 		}
 
@@ -82,7 +81,6 @@ namespace VCC::Core
 		}
 
 	}
-
 
 	cpak_cartridge::cpak_cartridge(
 		HMODULE module_handle,

@@ -1,4 +1,4 @@
-#define USE_LOGGING
+//#define USE_LOGGING
 ////////////////////////////////////////////////////////////////////////////////
 //	Copyright 2015 by Joseph Forgione
 //	This file is part of VCC (Virtual Color Computer).
@@ -45,11 +45,6 @@ namespace
 	} };
 }
 
-// TODO: Every mpi_ method must be examined to remove all
-// overloading or loading or unloading of cartridges
-// the mpi_ object is not a cartridge, it is a holder of
-// sufficient state to drive the UI
-
 configuration_dialog::configuration_dialog(
 	multipak_configuration& configuration,
 	multipak_cartridge& mpi)
@@ -65,7 +60,6 @@ struct slot_info {
 	uint32_t type; // 0==empty or Null
 };
 std::array<slot_info,5> gSlots{};
-
 
 void configuration_dialog::open()
 {
@@ -114,15 +108,11 @@ void configuration_dialog::select_new_cartridge(unsigned int item)
 	}
 	dlg.setFlags(OFN_FILEMUSTEXIST);
 
-// TODO: Every mpi_ reference to cartridges must be removed
 	if (dlg.show(0, dialog_handle_)) {
 	
-// 		mpi_.eject_cartridge(slot);
 		SendUnloadSlot(gVccWnd, slot+1); // Slot is 1-4
 
 		DLOG_C("MMI Config mount cartridge %d, %s\n",slot+1,dlg.path());
-
-//		if (mpi_.mount_cartridge(slot, dlg.path()) == cartridge_loader_status::success)
 
 		CartLoadRequest slotData{};
 		strcpy_s(slotData.pluginPath, slotData.size, dlg.path());
@@ -155,7 +145,6 @@ void configuration_dialog::set_selected_slot(size_t slot)
 		0,
 		reinterpret_cast<LPARAM>(rpy.description)
 	);
-//		reinterpret_cast<LPARAM>(mpi_.slot_description(slot).c_str()));
 
 	for (auto ndx(0u); ndx < gSlotUiElementIds.size(); ndx++)
 	{
@@ -254,10 +243,8 @@ void configuration_dialog::eject_or_select_new_cartridge(unsigned int Button)
 			break;
 	}	
 
-	//SendUnloadSlot(gVccWnd, slot+1); // Slot is 1-4
-	// TODO: Every mpi_ reference must be removed
-	// How to know the slot is empty????  Might have to
-	//if (!mpi_.empty(slot))
+	// type 0 means no slot
+	// TODO slot types should be an enum
 	if (gSlots[slot].type != 0)
 	{
 		// This probably does not belong except

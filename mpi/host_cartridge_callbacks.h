@@ -24,6 +24,9 @@ extern "C" __declspec(dllexport) void PakInitialize(
 	HWND hVccWnd,
 	const cpak_callbacks* const callbacks);
 
+//  THIS IS NOW OBSOLETE //
+
+/*
 class host_cartridge_callbacks : public ::VCC::Core::cartridge_callbacks
 {
 public:
@@ -72,7 +75,6 @@ private:
 		const cpak_callbacks* const callbacks);
 	friend class multipak_cartridge;
 
-
 private:
 
 	slot_id_type SlotId_;
@@ -86,4 +88,5 @@ private:
 	PakAssertInteruptHostCallback assert_interrupt_ = []
 			(slot_id_type, Interrupt, InterruptSource) {};
 };
+*/
 

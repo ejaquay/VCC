@@ -1,4 +1,4 @@
-#define USE_LOGGING
+//#define USE_LOGGING
 ////////////////////////////////////////////////////////////////////////////////
 //	Copyright 2015 by Joseph Forgione
 //	This file is part of VCC (Virtual Color Computer).
@@ -17,7 +17,6 @@
 //	VCC (Virtual Color Computer). If not, see <http://www.gnu.org/licenses/>.
 ////////////////////////////////////////////////////////////////////////////////
 #include "multipak_cartridge.h"
-#include "cartridge_slot_adapter.h"
 #include "mpi.h"
 #include "resource.h"
 #include <vcc/util/coreutil.h>
@@ -28,12 +27,10 @@
 #include <vcc/bus/cartridge_menuitem.h>
 #include <vcc/bus/cartridge_messages.h>
 
-
 // SlotId is an unsigned int 0-4 used to indicate to a cartridge which slot
 // it is in.  SlotId 0 is the boot slot, SlotId's 1-4 are multipak slots
 // mpi_slot indexes used elsewhere in this source differ, they represent only
 // multipak mpi_slots and are numbered 0-3,  (SlotId = mpi_slot+1)
-
 
 multipak_cartridge::multipak_cartridge(
 	multipak_configuration& configuration)
@@ -94,48 +91,40 @@ void multipak_cartridge::reset()
 	unsigned char mpi_slot = switch_slot_ & 3;
 	switch_slot_ = mpi_slot;
 
-	// Tell WndPrc what the active slot is now (for pakinterface)
+	// Tell pakinterface what the active slot is
 	SendActiveSlot(gVccWnd, switch_slot_);
-
-	// TODO:  Should pakrouter be doing this
-	for (const auto& cartridge_slot : slots_)
-	{
-		cartridge_slot.reset();
-	}
 }
 
+//--------------------------------------------
+// TODO Clean these out. MPI does not use them
 void multipak_cartridge::process_horizontal_sync()
 {
 	DLOG_C("XXX multipak_cartridge hsync\n");
 }
-
 void multipak_cartridge::write_port(unsigned char port_id, unsigned char value)
 {
 	DLOG_C("XXX multipak_cartridge write_port\n"); 
 }
-
 unsigned char multipak_cartridge::read_port(unsigned char port_id)
 {
 	DLOG_C("XXX multipak_cartridge read_port\n"); 
 	return 0;
 }
-
 unsigned char multipak_cartridge::read_memory_byte(unsigned short memory_address)
 {
 	DLOG_C("XXX multipak_cartridge read_memory_byte\n"); 
 	return 0;
 }
-
 void multipak_cartridge::status(char* text_buffer, size_t buffer_size)
 {
 	DLOG_C("XXX multipak_cartridge status\n"); 
 }
-
 unsigned short multipak_cartridge::sample_audio()
 {
 	DLOG_C("XXX multipak_cartridge sample_audio\n"); 
 	return 0;
 }
+//--------------------------------------------
 
 void multipak_cartridge::menu_item_clicked(unsigned char menu_item_id)
 {
@@ -146,7 +135,6 @@ void multipak_cartridge::menu_item_clicked(unsigned char menu_item_id)
 		gConfigurationDialog.open();
 	}
 }
-
 
 // Return MPI menu
 bool multipak_cartridge::get_menu_item(menu_item_entry* item, size_t index)

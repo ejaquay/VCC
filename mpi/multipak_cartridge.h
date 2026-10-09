@@ -44,10 +44,6 @@ public:
 
 	multipak_cartridge( multipak_configuration& configuration );
 
-//	multipak_cartridge(
-//		multipak_configuration& configuration,
-//		std::shared_ptr<callbacks_type> callbacks);
-
 	multipak_cartridge(const multipak_cartridge&) = delete;
 	multipak_cartridge(multipak_cartridge&&) = delete;
 
@@ -78,7 +74,6 @@ public:
 
 	bool empty(slot_id_type slot) const;
 
-//	void eject_cartridge(slot_id_type slot);
 	mount_status_type mount_cartridge(slot_id_type slot, const path_type& filename);
 
 	void switch_to_slot(slot_id_type slot);
@@ -90,16 +85,10 @@ public:
 
 private:
 	
-//	static const size_t slot_select_port_id = 0x7f;
 	static const size_t default_switch_slot_value = 0x03;
-//	static const size_t default_slot_register_value = 0xff;
 
 	VCC::Util::critical_section mutex_;
 	multipak_configuration& configuration_;
-//	std::shared_ptr<callbacks_type> callbacks_;
 	std::array<VCC::Core::cartridge_slot, NUMSLOTS> slots_;
-//	unsigned char slot_register_ = default_slot_register_value;
 	slot_id_type switch_slot_ = default_switch_slot_value;
-//	slot_id_type cached_cts_slot_ = default_switch_slot_value;
-//	slot_id_type cached_scs_slot_ = default_switch_slot_value;
 };

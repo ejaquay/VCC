@@ -31,14 +31,11 @@ static std::string gConfigurationFilename;
 HWND gVccWnd;
 
 slot_id_type SlotId = 0;
-//const std::shared_ptr<host_cartridge_callbacks>
-//	gHostCallbacks(std::make_shared<host_cartridge_callbacks>(SlotId, gConfigurationFilename));
 
 // mpi configuration object
 multipak_configuration gMultiPakConfiguration("MPI");
 
-// mpi cartridge object
-//multipak_cartridge gMultiPakInterface(gMultiPakConfiguration, gHostCallbacks);
+// mpi cartridge object  FIXME: Not needed MMI is simply a cpak_cartridge
 multipak_cartridge gMultiPakInterface(gMultiPakConfiguration);
 
 // the config dialog
@@ -71,10 +68,6 @@ extern "C"
 		gMultiPakConfiguration.configuration_path(configuration_path);
 		gConfigurationFilename = configuration_path;
 		gVccWnd = hVccWnd;
-//		gHostCallbacks->read_memory_byte_ = callbacks->read_memory_byte;
-//		gHostCallbacks->write_memory_byte_ = callbacks->write_memory_byte;
-//		gHostCallbacks->assert_interrupt_ = callbacks->assert_interrupt;
-//		gHostCallbacks->assert_cartridge_line_ = callbacks->assert_cartridge_line;
 		gMultiPakInterface.start();
 	}
 
@@ -150,5 +143,4 @@ BOOL WINAPI DllMain(HINSTANCE module_instance, DWORD reason, LPVOID /*reserved*/
 	}
 	return TRUE;
 }
-
 

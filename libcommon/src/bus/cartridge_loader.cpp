@@ -1,4 +1,4 @@
-#define USE_LOGGING
+//#define USE_LOGGING
 ////////////////////////////////////////////////////////////////////////////////
 //	Copyright 2015 by Joseph Forgione
 //	This file is part of VCC (Virtual Color Computer).
@@ -75,8 +75,11 @@ namespace VCC::Core
 
 	// Load a ROM cartridge
 	cartridge_loader_result load_rom_cartridge(
-		std::unique_ptr<cartridge_callbacks> parent_callbacks,
-		const std::string& filename)
+		const std::string& filename,
+		slot_id_type SlotId,
+		const std::string& iniPath,
+		HWND hVccWnd,
+		const cpak_callbacks& cpak_callbacks)
 	{
 		DLOG_C("cartridge_loader.load_rom_cartridge\n");
 		constexpr size_t PAK_MAX_MEM = 0x40000;
@@ -108,12 +111,15 @@ namespace VCC::Core
 		// it should be enabled.
 		constexpr bool enable_bank_switching = true;
 
-		auto rom = std::make_unique<VCC::Core::rom_cartridge>(
-			std::move(parent_callbacks),
+		// Create rom cartridge object to contain the rom
+		auto rom = std::make_unique<VCC::Core::rom_cartridge>
+		(
+			cpak_callbacks,
 			extract_filename(filename),
 			"",
 			std::move(romImage),
-			enable_bank_switching
+			enable_bank_switching,
+			SlotId
 		);
 
 		auto result = cartridge_loader_result {
@@ -129,7 +135,6 @@ namespace VCC::Core
 	// Load a dll cartridge
 	cartridge_loader_result load_cpak_cartridge(
 		const std::string& filename,
-		std::unique_ptr<cartridge_callbacks> parent_callbacks,
 		slot_id_type SlotId,
 		const std::string& iniPath,
 		HWND hVccWnd,
@@ -184,13 +189,13 @@ namespace VCC::Core
 	// libcommon/include/vcc/bus/cpak_cartridge_definitions.h.
 	cartridge_loader_result load_cartridge(
 		const std::string& filename,
-		std::unique_ptr<cartridge_callbacks> parent_callbacks,  //depreciated
 		slot_id_type SlotId,
 		const std::string& iniPath,
 		HWND hVccWnd,
 		const cpak_callbacks& cpak_callbacks)
 	{
-		DLOG_C("cartridge_loader.load_cartridge %s\n", filename.c_str());
+		DLOG_C("cartridge_loader.load_cartridge %d %s\n", SlotId,filename.c_str());
+
 		switch (VCC::Core::determine_cartridge_type(filename))
 		{
 		default:
@@ -198,21 +203,24 @@ namespace VCC::Core
 			return { nullptr, nullptr, cartridge_loader_status::cannot_open };
 
 		case cartridge_file_type::rom_image:	//	File is a ROM image
-			return VCC::Core::load_rom_cartridge(move(parent_callbacks), filename);
+			return VCC::Core::load_rom_cartridge(
+				filename,
+				SlotId,
+				iniPath,
+				hVccWnd,
+				cpak_callbacks);
 
 		case cartridge_file_type::library:		//	File is a DLL
 			return VCC::Core::load_cpak_cartridge(
 				filename,
-				move(parent_callbacks), // parent callback interface
 				SlotId,                 // Where cart is inserted
 				iniPath,                // Path to vcc ini file
-				hVccWnd,                // MainVcc window handle
+				hVccWnd,                // Vcc message proxy window
 				cpak_callbacks);        // DLL callbacks in here
 		}
 	}
 
-	// Return error string per cartridge load status.  This abandons loading the strings
-	// from Vcc.rc resources so mpi does not need to either access or duplicate them.
+	// Return error string per cartridge load status.
 	// TODO: Move and make this generic so it also can be used elsewhere in the project
 	std::string cartridge_load_error_string(const cartridge_loader_status error_status)
 	{

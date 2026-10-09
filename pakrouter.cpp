@@ -29,11 +29,13 @@
 #include <typeinfo>
 #include <algorithm>
 
+//------------------------------------------------------------------------
 // pakrouter handles routing and control of the plugin binary interface
 // An array of pointers to installed plugin objects is used. The array
 // contains five slots, 0 = boot slot, 1..4 are MPI slots, if present.
 // binary calls are routed to/from either boot slot or the MPI slots.
 // Correct active slot, cts, and scs information is essential for routing.
+//------------------------------------------------------------------------
 
 namespace VCC::Core
 {
@@ -91,9 +93,10 @@ namespace VCC::Core
 
 		//----------------------------------------------------------
 		// Convert PAK interrupt assert to CPU assert or Gime assert.
-		// FIXME: This is not correct COCO3 behaviour; the CART line
-		// is used to generate the CART INT on a real COCO3.
-		// SCS and ACIA use this.
+		// FIXME: This is not correct. On a real Coco the CART line
+		// is used to generate the INT. Both SCS and ACIA do this and
+		// should be fixed.  Also IRQ and FIRQ should comtain state
+		// so they can be edge triggered.
 		//----------------------------------------------------------
 		switch (intr) {
 		case INT_CART:
