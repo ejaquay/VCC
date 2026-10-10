@@ -225,26 +225,48 @@ namespace VCC::Core
 	}
 
 	// Build combined status line for loaded carts
-	void PakRouter::plugin_status(char * txt, size_t len)
+	void PakRouter::slot_status_(int slot, char* out, size_t maxout)
 	{
+		struct Buffer {
+			char tmp[gMaxSlotStatus*8]; // Well oversized buffer
+			uint32_t canary;
+		};
+		Buffer buf{};
+		buf.canary = 0xdeadbeef;
+
+		PakRouter::slot_get_status(slot, buf.tmp, gMaxSlotStatus);
+
+		if (buf.canary != 0xdeadbeef) {
+			DLOG_C("pakrouter.plugin_status overflow slot %d\n", slot);
+			out[0] = '\0';
+			return;
+		}
+		std::snprintf(out, maxout, "%.*s", maxout, buf.tmp);
+	}
+	void PakRouter::plugin_status(char* txt, size_t len)
+	{
+		txt[0] = '\0';
+
+		// No MPI or no multislot active
 		if (mpi_not_active()) {
-			// Oversize buf status buf attempt to limit how much is used
-			char tmp[64]{};
-			PakRouter::slot_get_status(0,tmp,24);
+			char tmp[gMaxSlotStatus+1]{};
+			slot_status_(0, tmp, sizeof(tmp));
 			if (tmp[0]) {
-				strncpy(txt,tmp,32);
+				std::snprintf(txt, len, "%s", tmp);
 			}
 			return;
 		}
-		snprintf(txt,len,"MPI:%d,%d",active_slot_,disk_slot_);
-		for (unsigned int i=1; i<=4; i++)
-		{
-			char tmp[64]{};
-			PakRouter::slot_get_status(i,tmp,24);
-			if (tmp[0]) {
-				strncat(txt," | ",len);
-				strncat(txt,tmp,32);
-			}
+		// MPI header
+		std::snprintf(txt, len, "MPI:%d,%d", active_slot_, disk_slot_);
+		// Append each MPI slot
+		for (unsigned int i = 1; i <= 4; i++) {
+			char tmp[32]{};
+			slot_status_(i, tmp, sizeof(tmp));
+			if (!tmp[0]) continue;
+			size_t used = std::strlen(txt);
+			if (used >= len) break;
+			std::snprintf(txt + used, len-used, " | %s", tmp);
 		}
 	}
 }
+

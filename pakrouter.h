@@ -140,8 +140,13 @@ using plugin_ptr = typename cartridge_loader_result::cartridge_ptr_type;
 			return 0;
 		}
 
-	private:
 
+	private:
+		// Helper to limit status output from cartridge
+		static const int gMaxSlotStatus = 24;
+		void slot_status_(int slot, char* out, size_t maxout);
+
+	private:
 		// Slots for cartridge objects;
 		std::array<plugin_ptr, NumCartSlots>& slots_;
 
