@@ -69,27 +69,28 @@ namespace VCC::Core
 	//-------------------
 	// Callbacks
 	//-------------------
+
+	// write and read memory are used by carts to do DMA (Hard disk carts do this)
 	void PakRouter::cart_write_memory(int slot, unsigned char val, unsigned short adr)
 	{
 		MemWrite8(val, adr);
 	};
-
 	unsigned char PakRouter::cart_read_memory(int slot,unsigned short adr)
 	{
 		return MemRead8(adr);
 	};
 
+	// Assert line is the only callback that is slot sensitive
 	void PakRouter::cart_assert_line(int slot, bool state)
 	{
+		if (slot == active_slot_) SetCart(state);
 		line_states_[slot] = state;
-		SetCart(line_states_[active_slot_]);
 	};
 
+	// Cart Assert NMI is used by fd502
 	void PakRouter::cart_assert_interrupt(int slot, Interrupt intr, InterruptSource src)
 	{
-		// TODO: Filter on SCS
-
-		(void) src; // not used, might be needed for state someday...
+		(void) src; // not used, might be used for state someday...
 
 		//----------------------------------------------------------
 		// Convert PAK interrupt assert to CPU assert or Gime assert.
