@@ -1,5 +1,5 @@
-//#define USE_LOGGING
-//#define USE_STAMPEDLOG
+#define USE_LOGGING
+#define USE_STAMPEDLOG
 //#define USE_LOGFILE
 //======================================================================
 // SDC simulator.  EJ Jaquay 2025

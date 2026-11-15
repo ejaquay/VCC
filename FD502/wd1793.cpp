@@ -307,9 +307,9 @@ void unmount_disk_image(unsigned char drive)
 void DiskStatus(char* text_buffer, size_t buffer_size)
 {
 	if (MotorOn==1)
-		sprintf(text_buffer,"FD-502:Drv:%1.1i %s Trk:%2.2i Sec:%2.2i Hd:%1.1i",CurrentDisk,ImageFormat[gVirtualDrive[CurrentDisk].ImageType],gVirtualDrive[CurrentDisk].HeadPosition,SectorReg,Side);
+		sprintf(text_buffer,"FD:%u %s T:%2.2u S:%2.2u H:%u",CurrentDisk,ImageFormat[gVirtualDrive[CurrentDisk].ImageType],gVirtualDrive[CurrentDisk].HeadPosition,SectorReg,Side);
 	else
-		sprintf(text_buffer,"FD-502:Idle");
+		sprintf(text_buffer,"FD:idle");
 }
 
 unsigned char MountDisk(const char *FileName,unsigned char disk)

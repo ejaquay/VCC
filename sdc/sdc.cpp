@@ -1,5 +1,5 @@
-//#define USE_LOGGING
-//#define USE_STAMPEDLOG
+#define USE_LOGGING
+#define USE_STAMPEDLOG
 //#define USE_LOGFILE
 //======================================================================
 // SDC simulator.  EJ Jaquay 2025
@@ -109,15 +109,13 @@ namespace util = ::VCC::Util;
 //======================================================================
 
 static HINSTANCE gModuleInstance; // Dll handle
-static int idle_ctr = 0; // Idle Status counter
+static int gIdleCtr = 0; // Idle Status counter
 
 static slot_id_type gSlotId {};
 
 // Assert NMI callback.
 static PakAssertInteruptHostCallback AssertInterruptCallback = nullptr;
-void AssertNMI() {
-   if(AssertInterruptCallback) AssertInterruptCallback(gSlotId, INT_NMI, IS_NMI);
-}
+void AssertNMI();
 
 // Settings
 static char IniFile[MAX_PATH] = {};
@@ -129,7 +127,6 @@ static HWND hSDCardBox = nullptr;
 static HWND hStartBankBox = nullptr;
 
 static int ClockEnable = 0;
-static char SDCStatusLine[16] = {}; // Status line
 static char PakRom[0x4000] = {};
 
 static std::string gSDRoot {}; // SD card root directory
@@ -141,6 +138,8 @@ CocoDisk gCocoDisk[2] {};
 
 // SDC CoCo Interface
 static Interface IFace {};
+
+static char gStatusLine[32] = {}; // Status line
 
 // Flash banks
 static char FlashFile[8][MAX_PATH];
@@ -243,9 +242,6 @@ void SDCLoadReply(const void *, int);
 bool SDCReadDrive(unsigned char,unsigned int);
 bool SDCLoadNextDirPage();
 std::string SDCGetFullPath(const std::string&);
-
-
-void UpdateStatusLine(unsigned int, unsigned int, unsigned int);
 
 // used by sdc_floppy (for now)
 bool SDCSeekSector(unsigned char,unsigned int);
@@ -354,13 +350,13 @@ extern "C"
     // Return SDC status.
     __declspec(dllexport) void PakGetStatus(char* text_buffer, size_t buffer_size)
     {
-        if (idle_ctr < 100) {
-            idle_ctr++;
+        if (gIdleCtr < 100) {
+            gIdleCtr++;
         } else {
-            idle_ctr = 0;
-            snprintf(SDCStatusLine,sizeof(SDCStatusLine),"SDC:%d idle",gLoadedBank);
+            gIdleCtr = 0;
+            snprintf(gStatusLine,sizeof(gStatusLine),"SDC:idle");
         }
-        strncpy(text_buffer,SDCStatusLine,buffer_size);
+        strncpy(text_buffer,gStatusLine,buffer_size);
     }
 
     // Return a byte from the current PAK ROM
@@ -388,6 +384,18 @@ extern "C"
         PingFloppy();
         return;
     }
+
+}
+
+void AssertNMI()
+{
+    if (AssertInterruptCallback)
+        AssertInterruptCallback(gSlotId, INT_NMI, IS_NMI);
+}
+
+void UpdStatusLine(unsigned char drive, char* act, unsigned int blk) {
+    gIdleCtr = 0;
+    snprintf(gStatusLine,sizeof(gStatusLine),"SDC:%d %s %u",drive,act,blk);
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID rsvd)
@@ -403,11 +411,6 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID rsvd)
 //=====================================================================
 // User interface
 //======================================================================
-
-void UpdateStatusLine(unsigned int bank, unsigned int drive, unsigned int lsn)
-{
-    snprintf(SDCStatusLine,sizeof(SDCStatusLine),"SDC:%d Rd %d,%d",bank,drive,lsn);
-}
 
 //-------------------------------------------------------------
 // Return items for cartridge menu. Called for each item
@@ -945,6 +948,8 @@ void SDCStreamNextBlock()
 {
     if (!streaming) return;
 
+    UpdStatusLine(stream_drive, "Str blk", stream_block);
+
     if (stream_block >= stream_blocks) {
         DLOG_C("SDCStreamImage done\n");
         SDCStreamStop(STA_NORMAL);
@@ -969,8 +974,7 @@ void SDCStreamNextBlock()
         return;
     }
 
-// FIXME
-//    snprintf(SDC_Status,16,"SDC:%d St %d,%u",gLoadedBank,stream_drive,stream_block);
+//    UpdStatusLine(stream_drive, "Str blk", stream_block);
 
     SDCLoadReply(buf,STREAM_BLOCK_SIZE);
     IFace.status = STA_BUSY | STA_READY;
@@ -1564,42 +1568,6 @@ void SDCReadSector()
 }
 
 //----------------------------------------------------------------------
-// Stream image data
-//----------------------------------------------------------------------
-//void SDCStreamImage()
-//{
-//    // If already streaming continue
-//    if (streaming) {
-//        stream_lsn++;
-//    // Else start streaming
-//    } else {
-//        stream_cmdcode = IFace.cmdcode;
-//        IFace.reply_mode = ((IFace.cmdcode & 4) == 0) ? 0 : 1;
-//        stream_lsn = (IFace.param1 << 16) + (IFace.param2 << 8) + IFace.param3;
-//        DLOG("SDCStreamImage lsn %d\n",stream_lsn);
-//    }
-//
-//    // For now can only stream 512 byte sectors
-//    int drive = stream_cmdcode & 1;
-//    gCocoDisk[drive].sectorsize = 512;
-//    gCocoDisk[drive].tracksectors = 9;
-//
-//    if (stream_lsn > (gCocoDisk[drive].size/gCocoDisk[drive].sectorsize)) {
-//        DLOG("SDCStreamImage done\n");
-//        streaming = 0;
-//        return;
-//    }
-//
-//    if (!SDCReadDrive(stream_cmdcode,stream_lsn)) {
-//        DLOG("SDCStreamImage read error %s\n",util::LastErrorTxt());
-//        IFace.status = STA_FAIL;
-//        streaming = 0;
-//        return;
-//    }
-//    streaming = 1;
-//}
-
-//----------------------------------------------------------------------
 // Write logical sector
 //----------------------------------------------------------------------
 void SDCWriteSector()
@@ -1611,7 +1579,7 @@ void SDCWriteSector()
     LOG_STAMPED(hsync_clock,"SDC write sector drive:%d lsn:%d", drive, lsn);
 
     // Update status line
-    UpdateStatusLine(gLoadedBank,drive,lsn);
+    UpdStatusLine(drive, "Rd sect", lsn);
 
     if (gCocoDisk[drive].hFile == nullptr) {
         IFace.status = STA_FAIL;
@@ -1758,7 +1726,7 @@ bool SDCReadDrive(unsigned char cmdcode, unsigned int lsn)
     }
 
     // Update status line
-    UpdateStatusLine(gLoadedBank,drive,lsn);
+    UpdStatusLine(drive, "Rd sect", lsn);
 
     SDCLoadReply(buf,cnt);
     return true;
